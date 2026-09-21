@@ -59,6 +59,7 @@ export const screenings = pgTable("screenings", {
   // Anthropometrics
   heightCm: real("height_cm").notNull(),
   weightKg: real("weight_kg").notNull(),
+  waistCm: real("waist_cm"),
   bmi: real("bmi").notNull(),
 
   // Medical history

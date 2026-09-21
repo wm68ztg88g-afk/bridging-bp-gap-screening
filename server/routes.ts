@@ -134,7 +134,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "patientName", "dob", "sex", "ethnicity", "postcode", "phone",
       "preferredLanguage", "interpreterNeeded", "registeredWithGp", "gpPractice",
       "bp1Systolic", "bp1Diastolic", "bp2Systolic", "bp2Diastolic", "bp3Systolic", "bp3Diastolic",
-      "avgSystolic", "avgDiastolic", "heartRate", "heightCm", "weightKg", "bmi",
+      "avgSystolic", "avgDiastolic", "heartRate", "heightCm", "weightKg", "waistCm", "bmi",
       "knownHypertension", "currentMedications", "otherConditions", "smokingStatus", "familyHistoryHtn",
       "consentToContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
     ];

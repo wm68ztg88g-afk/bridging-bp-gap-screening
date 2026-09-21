@@ -74,6 +74,7 @@ interface FormState {
   heartRate: string;
   heightCm: string;
   weightKg: string;
+  waistCm: string;
   knownHypertension: "yes" | "no" | "";
   currentMedications: string;
   otherConditions: string[];
@@ -105,6 +106,7 @@ const EMPTY: FormState = {
   heartRate: "",
   heightCm: "",
   weightKg: "",
+  waistCm: "",
   knownHypertension: "",
   currentMedications: "",
   otherConditions: [],
@@ -259,6 +261,7 @@ export default function NewScreening() {
         heartRate: form.heartRate ? parseInt(form.heartRate) : null,
         heightCm: parseFloat(form.heightCm),
         weightKg: parseFloat(form.weightKg),
+        waistCm: form.waistCm.trim() ? parseFloat(form.waistCm) : null,
         knownHypertension: form.knownHypertension === "yes",
         currentMedications: form.knownHypertension === "yes" ? form.currentMedications.trim() || null : null,
         otherConditions: JSON.stringify(otherConditions),
@@ -523,6 +526,11 @@ export default function NewScreening() {
                   onChange={(e) => set("weightKg", e.target.value)} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="waist">Waist circumference (cm)</Label>
+              <Input id="waist" data-testid="input-waist" inputMode="decimal" value={form.waistCm}
+                onChange={(e) => set("waistCm", e.target.value)} />
+            </div>
             {bmi !== null && (
               <div className="flex items-center justify-between rounded-md bg-muted/50 border border-border px-3 py-2">
                 <span className="text-sm text-muted-foreground">Calculated BMI</span>
@@ -618,6 +626,7 @@ export default function NewScreening() {
                 <ReviewRow label="GP" value={form.registeredWithGp === "yes" ? form.gpPractice : "Not registered"} />
                 <ReviewRow label="BP average" value={avg ? `${avg.avgSys}/${avg.avgDia} mmHg (${avg.category})` : "—"} />
                 <ReviewRow label="BMI" value={bmi !== null ? String(bmi) : "—"} />
+                <ReviewRow label="Waist" value={form.waistCm.trim() ? `${form.waistCm} cm` : "—"} />
                 <ReviewRow label="Known hypertension" value={form.knownHypertension === "yes" ? "Yes" : "No"} />
                 <ReviewRow
                   label="Other conditions"

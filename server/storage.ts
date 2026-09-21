@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   heart_rate INTEGER,
   height_cm REAL NOT NULL,
   weight_kg REAL NOT NULL,
+  waist_cm REAL,
   bmi REAL NOT NULL,
   known_hypertension BOOLEAN NOT NULL,
   current_medications TEXT,
