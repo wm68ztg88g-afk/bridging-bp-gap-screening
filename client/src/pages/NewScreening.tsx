@@ -119,7 +119,7 @@ const EMPTY: FormState = {
   consentGpContact: false,
 };
 
-const STEPS = ["Patient details", "BP & measurements", "Medical history", "Review & submit"];
+const STEPS = ["Consent", "Patient details", "BP & measurements", "Medical history", "Review & submit"];
 
 function classifyBp(sys: number, dia: number) {
   if (sys >= 180 || dia >= 120) return { category: "Severe / possible crisis", urgent: true };
@@ -168,6 +168,10 @@ export default function NewScreening() {
 
   function validateStep(i: number): string | null {
     if (i === 0) {
+      if (!form.consentToContact)
+        return "The patient must agree to their details being recorded before you continue.";
+    }
+    if (i === 1) {
       if (!form.patientName.trim()) return "Enter the patient's name.";
       if (!form.dob) return "Enter the date of birth.";
       if (!form.sex) return "Select a sex.";
@@ -177,7 +181,7 @@ export default function NewScreening() {
       if (form.registeredWithGp === "yes" && !form.gpPractice.trim())
         return "Enter the GP practice name.";
     }
-    if (i === 1) {
+    if (i === 2) {
       const nums = [
         form.bp1Systolic, form.bp1Diastolic,
         form.bp2Systolic, form.bp2Diastolic,
@@ -186,11 +190,11 @@ export default function NewScreening() {
       if (nums.some((n) => !n.trim())) return "Enter all three blood pressure readings.";
       if (!form.heightCm.trim() || !form.weightKg.trim()) return "Enter height and weight.";
     }
-    if (i === 2) {
+    if (i === 3) {
       if (!form.knownHypertension) return "Say whether the patient has known hypertension.";
       if (!form.smokingStatus) return "Select a smoking status.";
     }
-    if (i === 3) {
+    if (i === 4) {
       if (!form.consentToContact) return "Patient consent to be contacted is required before submitting.";
     }
     return null;
@@ -203,7 +207,7 @@ export default function NewScreening() {
       return;
     }
     if (!volunteer) return;
-    if (step === 0) {
+    if (step === 1) {
       try {
         const res = await apiRequest(
           "GET",
@@ -367,6 +371,35 @@ export default function NewScreening() {
         )}
         {step === 0 && (
           <div className="space-y-5">
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Before you start</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Please read this to the patient (or explain in your own words) before recording any of their
+                  details. The information collected here is used only to support this patient's care and to
+                  evaluate the Bridging the BP Gap programme. It is stored securely and can only be accessed by
+                  the programme's clinical lead and directly-involved St George's Hospital project team members
+                  — it will not be shared with anyone else without the patient's permission, except where the law
+                  requires it (for example, a safeguarding concern). Records are kept for the duration of the
+                  programme and for up to two years afterwards to allow for evaluation and audit, after which
+                  they are securely deleted. Taking part is voluntary, and they can ask you to stop at any time
+                  before you submit the form.
+                </p>
+                <div className="flex items-start gap-2 rounded-md border border-border p-3">
+                  <Checkbox id="consent" checked={form.consentToContact}
+                    onCheckedChange={(c) => set("consentToContact", !!c)} data-testid="checkbox-consent" />
+                  <Label htmlFor="consent" className="font-normal text-sm leading-relaxed">
+                    The patient has agreed that their details and readings can be recorded and that a member of
+                    the clinical team may contact them about their blood pressure. *
+                  </Label>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="hub">Screening location (optional)</Label>
               <Input id="hub" data-testid="input-hub" placeholder="e.g. WCEN Community Hub"
@@ -454,7 +487,7 @@ export default function NewScreening() {
           </div>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <div className="space-y-5">
             <Card>
               <CardHeader className="pb-3">
@@ -543,7 +576,7 @@ export default function NewScreening() {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <div className="space-y-5">
             <div className="space-y-2">
               <Label>Known hypertension? *</Label>
@@ -618,7 +651,7 @@ export default function NewScreening() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="space-y-5">
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Review</CardTitle></CardHeader>
@@ -639,25 +672,13 @@ export default function NewScreening() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Privacy</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Consent</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  The information collected here is used only to support this patient's care and to evaluate the
-                  Bridging the BP Gap programme. It is stored securely and can only be accessed by the programme's
-                  clinical lead and directly-involved St George's Hospital project team members — it will not be
-                  shared with anyone else without the patient's permission, except where the law requires it (for
-                  example, a safeguarding concern). Records are kept for the duration of the programme and for up
-                  to two years afterwards to allow for evaluation and audit, after which they are securely deleted.
+                  Confirmed at the start of this screening: the patient has agreed that their details and
+                  readings can be recorded and that a member of the clinical team may contact them about their
+                  blood pressure.
                 </p>
-
-                <div className="flex items-start gap-2 rounded-md border border-border p-3">
-                  <Checkbox id="consent" checked={form.consentToContact}
-                    onCheckedChange={(c) => set("consentToContact", !!c)} data-testid="checkbox-consent" />
-                  <Label htmlFor="consent" className="font-normal text-sm leading-relaxed">
-                    The patient has agreed that their details and readings can be recorded and that a member of
-                    the clinical team may contact them about their blood pressure. *
-                  </Label>
-                </div>
 
                 {form.registeredWithGp === "yes" && (
                   <div className="flex items-start gap-2 rounded-md border border-border p-3">
