@@ -71,6 +71,7 @@ export const screenings = pgTable("screenings", {
 
   notes: text("notes"),
   consentToContact: boolean("consent_to_contact").notNull(),
+  consentGpContact: boolean("consent_gp_contact"),
 
   // Computed / triage
   bpCategory: text("bp_category").notNull(),

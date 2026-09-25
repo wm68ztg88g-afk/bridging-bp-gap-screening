@@ -136,7 +136,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "bp1Systolic", "bp1Diastolic", "bp2Systolic", "bp2Diastolic", "bp3Systolic", "bp3Diastolic",
       "avgSystolic", "avgDiastolic", "heartRate", "heightCm", "weightKg", "waistCm", "bmi",
       "knownHypertension", "currentMedications", "otherConditions", "smokingStatus", "familyHistoryHtn",
-      "consentToContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
+      "consentToContact", "consentGpContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);

@@ -83,6 +83,7 @@ interface FormState {
   familyHistoryHtn: boolean;
   notes: string;
   consentToContact: boolean;
+  consentGpContact: boolean;
 }
 
 const EMPTY: FormState = {
@@ -115,6 +116,7 @@ const EMPTY: FormState = {
   familyHistoryHtn: false,
   notes: "",
   consentToContact: false,
+  consentGpContact: false,
 };
 
 const STEPS = ["Patient details", "BP & measurements", "Medical history", "Review & submit"];
@@ -269,6 +271,7 @@ export default function NewScreening() {
         familyHistoryHtn: form.familyHistoryHtn,
         notes: form.notes.trim() || null,
         consentToContact: form.consentToContact,
+        consentGpContact: form.registeredWithGp === "yes" ? form.consentGpContact : null,
       });
       setSuccess(true);
     } catch (e: any) {
@@ -634,14 +637,40 @@ export default function NewScreening() {
                 />
               </CardContent>
             </Card>
-            <div className="flex items-start gap-2 rounded-md border border-border p-3">
-              <Checkbox id="consent" checked={form.consentToContact}
-                onCheckedChange={(c) => set("consentToContact", !!c)} data-testid="checkbox-consent" />
-              <Label htmlFor="consent" className="font-normal text-sm leading-relaxed">
-                The patient has agreed that their details and readings can be recorded and that a member of
-                the clinical team may contact them about their blood pressure. *
-              </Label>
-            </div>
+
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Privacy</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  The information collected here is used only to support this patient's care and to evaluate the
+                  Bridging the BP Gap programme. It is stored securely and can only be accessed by the programme's
+                  clinical lead and directly-involved St George's Hospital project team members — it will not be
+                  shared with anyone else without the patient's permission, except where the law requires it (for
+                  example, a safeguarding concern). Records are kept for the duration of the programme and for up
+                  to two years afterwards to allow for evaluation and audit, after which they are securely deleted.
+                </p>
+
+                <div className="flex items-start gap-2 rounded-md border border-border p-3">
+                  <Checkbox id="consent" checked={form.consentToContact}
+                    onCheckedChange={(c) => set("consentToContact", !!c)} data-testid="checkbox-consent" />
+                  <Label htmlFor="consent" className="font-normal text-sm leading-relaxed">
+                    The patient has agreed that their details and readings can be recorded and that a member of
+                    the clinical team may contact them about their blood pressure. *
+                  </Label>
+                </div>
+
+                {form.registeredWithGp === "yes" && (
+                  <div className="flex items-start gap-2 rounded-md border border-border p-3">
+                    <Checkbox id="consent-gp" checked={form.consentGpContact}
+                      onCheckedChange={(c) => set("consentGpContact", !!c)} data-testid="checkbox-consent-gp" />
+                    <Label htmlFor="consent-gp" className="font-normal text-sm leading-relaxed">
+                      The patient has agreed that their GP practice may be informed of these results if the
+                      clinical team feels it is appropriate (optional).
+                    </Label>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

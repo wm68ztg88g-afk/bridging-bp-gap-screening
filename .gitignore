@@ -13,3 +13,11 @@ data.db-journal
 
 *.log
 .DS_Store
+
+# Personal reference materials — not part of the app
+Bridging-the-BP-Gap-Reference.docx
+Bridging-the-BP-Gap-Reference.pdf
+build_reference_doc.cjs
+page-*.jpg
+volunteer-access-codes.txt
+volunteer-qr-code.png

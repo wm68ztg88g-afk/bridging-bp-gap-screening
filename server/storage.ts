@@ -67,12 +67,19 @@ CREATE TABLE IF NOT EXISTS screenings (
   family_history_htn BOOLEAN NOT NULL DEFAULT false,
   notes TEXT,
   consent_to_contact BOOLEAN NOT NULL,
+  consent_gp_contact BOOLEAN,
   bp_category TEXT NOT NULL,
   urgent_flag BOOLEAN NOT NULL DEFAULT false,
   outcome TEXT NOT NULL DEFAULT 'Not yet reviewed',
   outcome_notes TEXT,
   created_at TEXT NOT NULL
 );
+`);
+
+  // Safe migration for databases created before this column existed —
+  // CREATE TABLE IF NOT EXISTS above won't add columns to an existing table.
+  await pool.query(`
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS consent_gp_contact BOOLEAN;
 `);
 }
 
