@@ -21,3 +21,9 @@ build_reference_doc.cjs
 page-*.jpg
 volunteer-access-codes.txt
 volunteer-qr-code.png
+Consent-Card-*
+build_consent_card.cjs
+build_consent_cards_multilang.cjs
+translations.json
+card-*.jpg
+labeled_*.jpg

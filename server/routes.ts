@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { storage } from "./storage";
 import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema } from "@shared/schema";
+import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 
 // Never ship a fallback admin credential. Configure this in the server runtime
 // environment before publishing.
@@ -35,14 +36,6 @@ async function requireVolunteer(req: Request, res: Response, next: NextFunction)
 function computeBmi(heightCm: number, weightKg: number) {
   const heightM = heightCm / 100;
   return Math.round((weightKg / (heightM * heightM)) * 10) / 10;
-}
-
-function classifyBp(sys: number, dia: number) {
-  if (sys >= 180 || dia >= 120) return { category: "Severe / possible crisis", urgent: true };
-  if (sys >= 160 || dia >= 100) return { category: "Stage 2 hypertension", urgent: false };
-  if (sys >= 140 || dia >= 90) return { category: "Stage 1 hypertension", urgent: false };
-  if (sys >= 120 || dia >= 80) return { category: "High-normal", urgent: false };
-  return { category: "Normal", urgent: false };
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -137,6 +130,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "avgSystolic", "avgDiastolic", "heartRate", "heightCm", "weightKg", "waistCm", "bmi",
       "knownHypertension", "currentMedications", "otherConditions", "smokingStatus", "familyHistoryHtn",
       "consentToContact", "consentGpContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
+      "currentProgrammeBand", "currentProgrammeAdvice", "currentProgrammeVersion",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);
@@ -147,7 +141,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     };
     const lines = [headers.join(",")];
     for (const r of rows) {
-      lines.push(headers.map((h) => escape((r as any)[h])).join(","));
+      const current = classifyBp(r.avgSystolic, r.avgDiastolic);
+      const exportRow = {
+        ...r,
+        currentProgrammeBand: current.category,
+        currentProgrammeAdvice: current.advice,
+        currentProgrammeVersion: BP_PROTOCOL_VERSION,
+      };
+      lines.push(headers.map((h) => escape((exportRow as any)[h])).join(","));
     }
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="bp-gap-screenings-${new Date().toISOString().slice(0, 10)}.csv"`);

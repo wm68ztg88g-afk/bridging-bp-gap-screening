@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useStore } from "@/lib/store";
 import { Logo } from "@/components/Logo";
 import { ArrowLeft, Download, LogOut, ShieldCheck, UserPlus } from "lucide-react";
+import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
+import { BP_BAND_STYLES } from "@/components/BpGuidance";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -161,16 +163,20 @@ function RecordsPanel({ password }: { password: string }) {
   if (error) return <p className="text-sm text-destructive">Couldn't load records.</p>;
 
   const total = rows?.length ?? 0;
-  const elevated = rows?.filter((r: any) => r.bpCategory !== "Normal").length ?? 0;
-  const urgent = rows?.filter((r: any) => r.urgentFlag).length ?? 0;
+  const elevated = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).category !== "Green").length ?? 0;
+  const urgent = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).urgent).length ?? 0;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Screened" value={total} testId="stat-total" />
-        <StatCard label="Elevated BP" value={elevated} testId="stat-elevated" />
-        <StatCard label="Urgent flags" value={urgent} testId="stat-urgent" tone={urgent > 0 ? "destructive" : undefined} />
+        <StatCard label="Yellow / amber / red" value={elevated} testId="stat-elevated" />
+        <StatCard label="Red band" value={urgent} testId="stat-urgent" tone={urgent > 0 ? "destructive" : undefined} />
       </div>
+      <p className="text-xs text-muted-foreground">
+        Current programme bands ({BP_PROTOCOL_VERSION}) are calculated from the recorded BP averages.
+        Historical readings and saved categories are unchanged. CSV includes both the recorded category and current programme band.
+      </p>
 
       <div className="flex justify-end">
         <a
@@ -188,7 +194,7 @@ function RecordsPanel({ password }: { password: string }) {
             <TableRow>
               <TableHead>Patient</TableHead>
               <TableHead>BP avg</TableHead>
-              <TableHead>Category</TableHead>
+              <TableHead>Current band / advice</TableHead>
               <TableHead>BMI</TableHead>
               <TableHead>Volunteer</TableHead>
               <TableHead>Date</TableHead>
@@ -196,14 +202,20 @@ function RecordsPanel({ password }: { password: string }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows?.map((r: any) => (
+            {rows?.map((r: any) => {
+              const current = classifyBp(r.avgSystolic, r.avgDiastolic);
+              return (
               <TableRow key={r.id} data-testid={`row-screening-${r.id}`}>
                 <TableCell className="font-medium">{r.patientName}</TableCell>
                 <TableCell className="tabular-nums">{r.avgSystolic}/{r.avgDiastolic}</TableCell>
                 <TableCell>
-                  <Badge variant={r.urgentFlag ? "destructive" : r.bpCategory === "Normal" ? "secondary" : "outline"}>
-                    {r.bpCategory}
+                  <Badge variant="outline" className={BP_BAND_STYLES[current.category]}>
+                    {current.category}
                   </Badge>
+                  <p className="text-xs mt-1 min-w-48 max-w-xs">{current.advice}</p>
+                  {r.bpCategory !== current.category && (
+                    <p className="text-xs text-muted-foreground mt-1">Originally recorded: {r.bpCategory}</p>
+                  )}
                 </TableCell>
                 <TableCell className="tabular-nums">{r.bmi}</TableCell>
                 <TableCell className="text-muted-foreground">{r.volunteerName}</TableCell>
@@ -222,7 +234,7 @@ function RecordsPanel({ password }: { password: string }) {
                   </Select>
                 </TableCell>
               </TableRow>
-            ))}
+            );})}
             {total === 0 && (
               <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No screenings recorded yet.</TableCell></TableRow>
             )}

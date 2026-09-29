@@ -14,7 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { BpGuidance, EmergencyAdvice } from "@/components/BpGuidance";
+import { classifyBp } from "@shared/bp-protocol";
 import { useStore } from "@/lib/store";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -121,14 +122,6 @@ const EMPTY: FormState = {
 
 const STEPS = ["Consent", "Patient details", "BP & measurements", "Medical history", "Review & submit"];
 
-function classifyBp(sys: number, dia: number) {
-  if (sys >= 180 || dia >= 120) return { category: "Severe / possible crisis", urgent: true };
-  if (sys >= 160 || dia >= 100) return { category: "Stage 2 hypertension", urgent: false };
-  if (sys >= 140 || dia >= 90) return { category: "Stage 1 hypertension", urgent: false };
-  if (sys >= 120 || dia >= 80) return { category: "High-normal", urgent: false };
-  return { category: "Normal", urgent: false };
-}
-
 export default function NewScreening() {
   const { volunteer } = useStore();
   const [, navigate] = useLocation();
@@ -152,7 +145,7 @@ export default function NewScreening() {
     const s3 = parseInt(form.bp3Systolic);
     const d2 = parseInt(form.bp2Diastolic);
     const d3 = parseInt(form.bp3Diastolic);
-    if ([s2, s3, d2, d3].some((n) => Number.isNaN(n))) return null;
+    if ([s2, s3, d2, d3].some((n) => !Number.isFinite(n) || n <= 0)) return null;
     const avgSys = Math.round((s2 + s3) / 2);
     const avgDia = Math.round((d2 + d3) / 2);
     return { avgSys, avgDia, ...classifyBp(avgSys, avgDia) };
@@ -188,7 +181,11 @@ export default function NewScreening() {
         form.bp3Systolic, form.bp3Diastolic,
       ];
       if (nums.some((n) => !n.trim())) return "Enter all three blood pressure readings.";
+      if (nums.some((n) => !Number.isInteger(Number(n)) || Number(n) <= 0))
+        return "Blood pressure readings must be positive whole numbers.";
       if (!form.heightCm.trim() || !form.weightKg.trim()) return "Enter height and weight.";
+      if (![Number(form.heightCm), Number(form.weightKg)].every((n) => Number.isFinite(n) && n > 0))
+        return "Height and weight must be positive numbers.";
     }
     if (i === 3) {
       if (!form.knownHypertension) return "Say whether the patient has known hypertension.";
@@ -233,7 +230,7 @@ export default function NewScreening() {
   }
 
   async function handleSubmit() {
-    const err = validateStep(3);
+    const err = STEPS.map((_, i) => validateStep(i)).find(Boolean);
     if (err) {
       toast({ title: "Missing information", description: err, variant: "destructive" });
       return;
@@ -305,6 +302,8 @@ export default function NewScreening() {
                 {form.patientName}'s record has been added.
               </p>
             </div>
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
+            <EmergencyAdvice />
             <div className="flex flex-col gap-2 pt-2">
               <Button
                 onClick={() => {
@@ -354,6 +353,7 @@ export default function NewScreening() {
       </header>
 
       <main className="max-w-xl mx-auto px-4 pt-6 space-y-5">
+        <EmergencyAdvice />
         {duplicateWarning && (
           <div className="flex gap-2 items-start rounded-md border border-orange-300 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/40 p-3 text-sm text-orange-800 dark:text-orange-300">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -522,33 +522,7 @@ export default function NewScreening() {
               </CardContent>
             </Card>
 
-            {avg && (
-              <div
-                className={`rounded-md border p-3 space-y-1 ${
-                  avg.urgent
-                    ? "border-destructive/40 bg-destructive/10"
-                    : "border-border bg-muted/50"
-                }`}
-                data-testid="panel-bp-result"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Average (readings 2 &amp; 3)</span>
-                  <span className="text-lg font-semibold tabular-nums" data-testid="text-avg-bp">
-                    {avg.avgSys}/{avg.avgDia} mmHg
-                  </span>
-                </div>
-                <Badge variant={avg.urgent ? "destructive" : "secondary"} data-testid="badge-bp-category">
-                  {avg.category}
-                </Badge>
-                {avg.urgent && (
-                  <p className="text-sm text-destructive flex items-start gap-1.5 pt-1">
-                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                    This reading needs urgent same-day medical attention. Please follow the escalation
-                    protocol from your training and contact your clinical lead now.
-                  </p>
-                )}
-              </div>
-            )}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -653,6 +627,7 @@ export default function NewScreening() {
 
         {step === 4 && (
           <div className="space-y-5">
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Review</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">

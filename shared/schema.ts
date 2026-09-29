@@ -98,6 +98,15 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   volunteerName: true,
 }).extend({
   volunteerCode: z.string().min(1),
+  bp1Systolic: z.number().int().positive(),
+  bp1Diastolic: z.number().int().positive(),
+  bp2Systolic: z.number().int().positive(),
+  bp2Diastolic: z.number().int().positive(),
+  bp3Systolic: z.number().int().positive(),
+  bp3Diastolic: z.number().int().positive(),
+  heightCm: z.number().positive(),
+  weightKg: z.number().positive(),
+  consentToContact: z.literal(true),
 });
 
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;
