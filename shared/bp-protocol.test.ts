@@ -29,9 +29,9 @@ test("reject invalid readings",()=>{
 });
 test("approved timing and emergency wording only",()=>{
   assert.equal(BP_ADVICE.Green,"Good news! Your blood pressure is in the green range today. Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly. If you take blood pressure medication, continue it as prescribed.");
-  assert.match(BP_ADVICE.Amber,/within 4 weeks of screening/);
-  assert.match(BP_ADVICE.Yellow,/within 1 month/);
-  assert.equal(BP_ADVICE.Red,"The SGH project team will contact you to arrange an urgent appointment.");
+  assert.equal(BP_ADVICE.Amber,"The SGH project team will contact you within 4 weeks of screening to arrange an appointment at St George’s Hospital. Also make an appointment to see your GP within 4 weeks.");
+  assert.equal(BP_ADVICE.Yellow,"Make an appointment with your GP within 1 month.");
+  assert.equal(BP_ADVICE.Red,"The SGH project team will contact you to arrange an urgent appointment in the next 24–48 hours at St George’s Hospital.");
   assert.doesNotMatch(EMERGENCY_ADVICE,/headache/i);
 });
 test("API schema requires consent and positive whole-number BP",()=>{

@@ -1,4 +1,4 @@
-import { classifyBp, BP_THRESHOLDS, EMERGENCY_ADVICE, type BpBand } from "@shared/bp-protocol";
+import { classifyBp, BP_THRESHOLDS, BP_ADVICE_PARAGRAPHS, EMERGENCY_ADVICE, type BpBand } from "@shared/bp-protocol";
 
 export const BP_BAND_STYLES: Record<BpBand, string> = {
   Green: "border-green-600 bg-green-100 text-green-950 dark:border-green-500 dark:bg-green-950 dark:text-green-100",
@@ -43,8 +43,17 @@ export function BpGuidance({ systolic, diastolic }: { systolic: number; diastoli
       </div>
       <BpBandBadge band={result.category} testId="badge-bp-category" />
       <p className="text-xs">{BP_THRESHOLDS[result.category]} • Use the higher band.</p>
-      <p className="text-sm leading-relaxed" data-testid="bp-action">{result.advice}</p>
-      <p className="text-xs">SGH = St George’s Hospital. A screening check is not a diagnosis.</p>
+      <div className="space-y-3 text-base leading-relaxed" data-testid="bp-action">
+        {BP_ADVICE_PARAGRAPHS[result.category].map((paragraph) => (
+          <p key={paragraph}>{paragraph.split(/(within 4 weeks of screening|within 4 weeks|within 1 month|in the next 24–48 hours)/g).map((part, i) =>
+            i % 2 ? <strong key={i}>{part}</strong> : part
+          )}</p>
+        ))}
+      </div>
+      {(result.category === "Amber" || result.category === "Red") && (
+        <p className="text-xs" data-testid="sgh-definition">SGH = St George’s Hospital.</p>
+      )}
+      <p className="text-xs">A screening check is not a diagnosis.</p>
     </section>
   );
 }

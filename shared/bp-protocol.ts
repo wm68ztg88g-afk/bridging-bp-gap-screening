@@ -1,14 +1,25 @@
 // Programme screening action bands, not diagnostic stages.
-// Source: participant flier and clinical-lead confirmation, 29 September 2026.
-export const BP_PROTOCOL_VERSION = "2026-10-01";
+// Thresholds: participant flier, 29 September 2026.
+// Advice: clinical-lead revisions, 1 October 2026 (including red 24–48 hours).
+export const BP_PROTOCOL_VERSION = "2026-10-01-v2";
 export type BpBand = "Green" | "Yellow" | "Amber" | "Red";
 
-export const BP_ADVICE: Record<BpBand, string> = {
-  Green: "Good news! Your blood pressure is in the green range today. Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly. If you take blood pressure medication, continue it as prescribed.",
-  Yellow: "See your GP within 1 month. Take your results card with you.",
-  Amber: "The SGH project team will contact you within 4 weeks of screening to arrange an appointment. Also see your GP within 4 weeks.",
-  Red: "The SGH project team will contact you to arrange an urgent appointment.",
+export const BP_ADVICE_PARAGRAPHS: Record<BpBand, string[]> = {
+  Green: [
+    "Good news! Your blood pressure is in the green range today.",
+    "Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly.",
+    "If you take blood pressure medication, continue it as prescribed.",
+  ],
+  Yellow: ["Make an appointment with your GP within 1 month."],
+  Amber: [
+    "The SGH project team will contact you within 4 weeks of screening to arrange an appointment at St George’s Hospital.",
+    "Also make an appointment to see your GP within 4 weeks.",
+  ],
+  Red: ["The SGH project team will contact you to arrange an urgent appointment in the next 24–48 hours at St George’s Hospital."],
 };
+export const BP_ADVICE = Object.fromEntries(
+  Object.entries(BP_ADVICE_PARAGRAPHS).map(([band, paragraphs]) => [band, paragraphs.join(" ")])
+) as Record<BpBand, string>;
 
 export const BP_THRESHOLDS: Record<BpBand, string> = {
   Green: "Top ≤135 AND bottom ≤85",
