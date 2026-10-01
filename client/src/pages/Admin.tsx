@@ -15,7 +15,7 @@ import { useStore } from "@/lib/store";
 import { Logo } from "@/components/Logo";
 import { ArrowLeft, Download, LogOut, ShieldCheck, UserPlus } from "lucide-react";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
-import { BP_BAND_STYLES } from "@/components/BpGuidance";
+import { BpBandBadge } from "@/components/BpGuidance";
 import { countEmhip, emhipLabel } from "@shared/emhip";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
@@ -224,9 +224,7 @@ function RecordsPanel({ password }: { password: string }) {
                 <TableCell data-testid={`emhip-screening-${r.id}`}>{emhipLabel(r.enrolledWithEmhip)}</TableCell>
                 <TableCell className="tabular-nums">{r.avgSystolic}/{r.avgDiastolic}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={BP_BAND_STYLES[current.category]}>
-                    {current.category}
-                  </Badge>
+                  <BpBandBadge band={current.category} />
                   <p className="text-xs mt-1 min-w-48 max-w-xs">{current.advice}</p>
                   {r.bpCategory !== current.category && (
                     <p className="text-xs text-muted-foreground mt-1">Originally recorded: {r.bpCategory}</p>
