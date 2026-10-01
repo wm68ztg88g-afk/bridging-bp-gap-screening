@@ -44,6 +44,8 @@ export const screenings = pgTable("screenings", {
 
   registeredWithGp: boolean("registered_with_gp").notNull(),
   gpPractice: text("gp_practice"),
+  // Nullable for records collected before this question was introduced.
+  enrolledWithEmhip: boolean("enrolled_with_emhip"),
 
   // Blood pressure — 3 readings, avg of last two per protocol
   bp1Systolic: integer("bp1_systolic").notNull(),
@@ -107,6 +109,8 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   heightCm: z.number().positive(),
   weightKg: z.number().positive(),
   consentToContact: z.literal(true),
+  // New submissions must explicitly answer Yes or No; never default to No.
+  enrolledWithEmhip: z.boolean(),
 });
 
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;

@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import { storage } from "./storage";
 import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema } from "@shared/schema";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
+import { emhipLabel } from "@shared/emhip";
 
 // Never ship a fallback admin credential. Configure this in the server runtime
 // environment before publishing.
@@ -131,6 +132,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "knownHypertension", "currentMedications", "otherConditions", "smokingStatus", "familyHistoryHtn",
       "consentToContact", "consentGpContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
       "currentProgrammeBand", "currentProgrammeAdvice", "currentProgrammeVersion",
+      "enrolledWithEmhip",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);
@@ -144,6 +146,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const current = classifyBp(r.avgSystolic, r.avgDiastolic);
       const exportRow = {
         ...r,
+        enrolledWithEmhip: emhipLabel(r.enrolledWithEmhip),
         currentProgrammeBand: current.category,
         currentProgrammeAdvice: current.advice,
         currentProgrammeVersion: BP_PROTOCOL_VERSION,

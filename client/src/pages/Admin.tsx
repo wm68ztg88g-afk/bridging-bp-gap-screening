@@ -16,6 +16,7 @@ import { Logo } from "@/components/Logo";
 import { ArrowLeft, Download, LogOut, ShieldCheck, UserPlus } from "lucide-react";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { BP_BAND_STYLES } from "@/components/BpGuidance";
+import { countEmhip, emhipLabel } from "@shared/emhip";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -165,6 +166,7 @@ function RecordsPanel({ password }: { password: string }) {
   const total = rows?.length ?? 0;
   const elevated = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).category !== "Green").length ?? 0;
   const urgent = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).urgent).length ?? 0;
+  const emhip = countEmhip(rows ?? []);
 
   return (
     <div className="space-y-5">
@@ -177,6 +179,17 @@ function RecordsPanel({ password }: { password: string }) {
         Current programme bands ({BP_PROTOCOL_VERSION}) are calculated from the recorded BP averages.
         Historical readings and saved categories are unchanged. CSV includes both the recorded category and current programme band.
       </p>
+      <section aria-labelledby="emhip-summary-title" className="space-y-2">
+        <h2 id="emhip-summary-title" className="text-sm font-medium">Enrolled with EMHIP?</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Yes" value={emhip.yes} testId="stat-emhip-yes" />
+          <StatCard label="No" value={emhip.no} testId="stat-emhip-no" />
+          <StatCard label="Not recorded" value={emhip.notRecorded} testId="stat-emhip-not-recorded" />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Counts screening records, not unique people. Earlier records without this answer are shown as Not recorded.
+        </p>
+      </section>
 
       <div className="flex justify-end">
         <a
@@ -193,6 +206,7 @@ function RecordsPanel({ password }: { password: string }) {
           <TableHeader>
             <TableRow>
               <TableHead>Patient</TableHead>
+              <TableHead>EMHIP enrolled</TableHead>
               <TableHead>BP avg</TableHead>
               <TableHead>Current band / advice</TableHead>
               <TableHead>BMI</TableHead>
@@ -207,6 +221,7 @@ function RecordsPanel({ password }: { password: string }) {
               return (
               <TableRow key={r.id} data-testid={`row-screening-${r.id}`}>
                 <TableCell className="font-medium">{r.patientName}</TableCell>
+                <TableCell data-testid={`emhip-screening-${r.id}`}>{emhipLabel(r.enrolledWithEmhip)}</TableCell>
                 <TableCell className="tabular-nums">{r.avgSystolic}/{r.avgDiastolic}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className={BP_BAND_STYLES[current.category]}>
@@ -236,7 +251,7 @@ function RecordsPanel({ password }: { password: string }) {
               </TableRow>
             );})}
             {total === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No screenings recorded yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No screenings recorded yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   interpreter_needed BOOLEAN NOT NULL DEFAULT false,
   registered_with_gp BOOLEAN NOT NULL,
   gp_practice TEXT,
+  enrolled_with_emhip BOOLEAN,
   bp1_systolic INTEGER NOT NULL,
   bp1_diastolic INTEGER NOT NULL,
   bp2_systolic INTEGER NOT NULL,
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   // CREATE TABLE IF NOT EXISTS above won't add columns to an existing table.
   await pool.query(`
 ALTER TABLE screenings ADD COLUMN IF NOT EXISTS consent_gp_contact BOOLEAN;
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS enrolled_with_emhip BOOLEAN;
 `);
 }
 

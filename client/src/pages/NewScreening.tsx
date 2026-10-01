@@ -66,6 +66,7 @@ interface FormState {
   interpreterNeeded: boolean;
   registeredWithGp: "yes" | "no" | "";
   gpPractice: string;
+  enrolledWithEmhip: "yes" | "no" | "";
   bp1Systolic: string;
   bp1Diastolic: string;
   bp2Systolic: string;
@@ -99,6 +100,7 @@ const EMPTY: FormState = {
   interpreterNeeded: false,
   registeredWithGp: "",
   gpPractice: "",
+  enrolledWithEmhip: "",
   bp1Systolic: "",
   bp1Diastolic: "",
   bp2Systolic: "",
@@ -173,6 +175,7 @@ export default function NewScreening() {
       if (!form.registeredWithGp) return "Say whether the patient is registered with a GP.";
       if (form.registeredWithGp === "yes" && !form.gpPractice.trim())
         return "Enter the GP practice name.";
+      if (!form.enrolledWithEmhip) return "Select Yes or No for Enrolled with EMHIP.";
     }
     if (i === 2) {
       const nums = [
@@ -255,6 +258,7 @@ export default function NewScreening() {
         interpreterNeeded: form.interpreterNeeded,
         registeredWithGp: form.registeredWithGp === "yes",
         gpPractice: form.registeredWithGp === "yes" ? form.gpPractice.trim() : null,
+        enrolledWithEmhip: form.enrolledWithEmhip === "yes",
         bp1Systolic: parseInt(form.bp1Systolic),
         bp1Diastolic: parseInt(form.bp1Diastolic),
         bp2Systolic: parseInt(form.bp2Systolic),
@@ -484,6 +488,26 @@ export default function NewScreening() {
                   onChange={(e) => set("gpPractice", e.target.value)} />
               </div>
             )}
+            <fieldset className="space-y-2 rounded-md border border-border p-3">
+              <legend id="emhip-label" className="px-1 text-sm font-medium">Enrolled with EMHIP? *</legend>
+              <RadioGroup
+                aria-labelledby="emhip-label"
+                aria-required="true"
+                value={form.enrolledWithEmhip}
+                onValueChange={(v) => set("enrolledWithEmhip", v as "yes" | "no")}
+                className="grid grid-cols-2 gap-3"
+                data-testid="radio-group-emhip"
+              >
+                <Label htmlFor="emhip-yes" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 font-normal">
+                  <RadioGroupItem value="yes" id="emhip-yes" data-testid="radio-emhip-yes" />
+                  Yes
+                </Label>
+                <Label htmlFor="emhip-no" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 font-normal">
+                  <RadioGroupItem value="no" id="emhip-no" data-testid="radio-emhip-no" />
+                  No
+                </Label>
+              </RadioGroup>
+            </fieldset>
           </div>
         )}
 
@@ -635,6 +659,7 @@ export default function NewScreening() {
                 <ReviewRow label="Sex / Ethnicity" value={`${form.sex} · ${form.ethnicity}`} />
                 <ReviewRow label="Postcode" value={form.postcode} />
                 <ReviewRow label="GP" value={form.registeredWithGp === "yes" ? form.gpPractice : "Not registered"} />
+                <ReviewRow label="Enrolled with EMHIP" value={form.enrolledWithEmhip === "yes" ? "Yes" : form.enrolledWithEmhip === "no" ? "No" : "Not recorded"} />
                 <ReviewRow label="BP average" value={avg ? `${avg.avgSys}/${avg.avgDia} mmHg (${avg.category})` : "—"} />
                 <ReviewRow label="BMI" value={bmi !== null ? String(bmi) : "—"} />
                 <ReviewRow label="Waist" value={form.waistCm.trim() ? `${form.waistCm} cm` : "—"} />
