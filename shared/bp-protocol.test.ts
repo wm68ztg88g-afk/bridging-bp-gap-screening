@@ -28,6 +28,7 @@ test("reject invalid readings",()=>{
   for(const n of [0,-1,NaN,Infinity])assert.throws(()=>classifyBp(n,85));
 });
 test("approved timing and emergency wording only",()=>{
+  assert.equal(BP_ADVICE.Green,"Good news! Your blood pressure is in the green range today. Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly. If you take blood pressure medication, continue it as prescribed.");
   assert.match(BP_ADVICE.Amber,/within 4 weeks of screening/);
   assert.match(BP_ADVICE.Yellow,/within 1 month/);
   assert.equal(BP_ADVICE.Red,"The SGH project team will contact you to arrange an urgent appointment.");

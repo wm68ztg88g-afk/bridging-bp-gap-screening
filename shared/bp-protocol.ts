@@ -1,10 +1,10 @@
 // Programme screening action bands, not diagnostic stages.
 // Source: participant flier and clinical-lead confirmation, 29 September 2026.
-export const BP_PROTOCOL_VERSION = "2026-09-29";
+export const BP_PROTOCOL_VERSION = "2026-10-01";
 export type BpBand = "Green" | "Yellow" | "Amber" | "Red";
 
 export const BP_ADVICE: Record<BpBand, string> = {
-  Green: "Continue blood pressure checks and treatment as advised.",
+  Green: "Good news! Your blood pressure is in the green range today. Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly. If you take blood pressure medication, continue it as prescribed.",
   Yellow: "See your GP within 1 month. Take your results card with you.",
   Amber: "The SGH project team will contact you within 4 weeks of screening to arrange an appointment. Also see your GP within 4 weeks.",
   Red: "The SGH project team will contact you to arrange an urgent appointment.",

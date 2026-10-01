@@ -21,3 +21,7 @@
 - Mobile form had no horizontal page overflow; no browser errors observed.
 - EMHIP field remains mandatory before moving beyond patient details. CSV retains the separate Yes/No/Not recorded column added in the preceding commit.
 - Ready for deployment to the existing Render service, together with the EMHIP update.
+
+## Green wording clarification
+On 1 October 2026 the clinical lead requested encouraging green advice that covers maintaining a healthy lifestyle and monitoring, with medication advice only for people already taking it. Green now says: “Good news! Your blood pressure is in the green range today. Keep up a healthy lifestyle to help it stay that way, and monitor your blood pressure regularly. If you take blood pressure medication, continue it as prescribed.”
+The shared definition feeds form/review/success, admin advice and CSV current advice. No thresholds or saved measurements changed.
