@@ -3,8 +3,8 @@
 //
 // Clinical lead decisions, 13 November 2026:
 // - Pregnant and BP above 135/85 (either reading): redirect to maternity services.
-// - Participant gives no way to be contacted: amber/red advice tells them to
-//   arrange follow-up themselves instead of waiting for the SGH team.
+// - Amber participant gives no way to be contacted: advice tells them to book
+//   their GP themselves. Red always needs a contact route; card wording unchanged.
 // Wording marked PENDING CONFIRMATION awaits clinical-lead sign-off.
 
 import { classifyBp, BP_ADVICE_PARAGRAPHS, type BpBand } from "./bp-protocol";
@@ -23,10 +23,15 @@ export const PREGNANT_IN_RANGE_ADVICE = [
   "Tell your midwife about this reading at your next appointment.",
 ];
 export const NO_CONTACT_ADVICE: Partial<Record<BpBand, string[]>> = {
+  // Red is never offered "no contact route": the SGH team always contacts red
+  // participants, so a phone number or other contact is mandatory (clinical lead, 13 Nov 2026).
   Amber: ["We won’t be able to contact you, so please book a GP appointment within 4 weeks."],
-  // PENDING CONFIRMATION ("today" / NHS 111).
-  Red: ["We won’t be able to contact you, so please contact your GP today, or call NHS 111 if you can’t get through."],
 };
+
+/** Red results must always have a contact route; "none given" is not allowed. */
+export function contactMandatory(band: BpBand, pregnant?: boolean | null): boolean {
+  return !pregnant && band === "Red";
+}
 
 export function isAbovePregnancyThreshold(sys: number, dia: number): boolean {
   return sys > PREGNANCY_THRESHOLD.systolic || dia > PREGNANCY_THRESHOLD.diastolic;

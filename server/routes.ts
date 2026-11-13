@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema, setTestSchema } from "@shared/schema";
 import { needsReason, NOT_REVIEWED, isOverdue } from "@shared/followup";
 import { sendBandAlert } from "./alerts";
-import { participantAdvice, needsContactRoute } from "@shared/participant-advice";
+import { participantAdvice, needsContactRoute, contactMandatory } from "@shared/participant-advice";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { emhipLabel } from "@shared/emhip";
 
@@ -93,7 +93,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     // Amber/red outside pregnancy: the SGH team must be able to reach them,
     // or the volunteer must have recorded that no contact route was given.
-    if (needsContactRoute(category, data.pregnant) && !data.phone && !data.altContact && !data.noContactRoute) {
+    const hasContact = !!data.phone || !!data.altContact;
+    if (contactMandatory(category, data.pregnant) && !hasContact) {
+      return res.status(422).json({ message: "A red result needs a phone number or other way for the SGH team to contact them." });
+    }
+    if (needsContactRoute(category, data.pregnant) && !hasContact && !data.noContactRoute) {
       return res.status(422).json({ message: "Add a phone number or other contact, or record that the participant gave none." });
     }
 

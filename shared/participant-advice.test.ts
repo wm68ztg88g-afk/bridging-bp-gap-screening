@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   participantAdvice, needsContactRoute, ageOn, ftInToCm, stLbToKg, isAbovePregnancyThreshold,
-  MATERNITY_ADVICE, PREGNANT_IN_RANGE_ADVICE,
+  MATERNITY_ADVICE, PREGNANT_IN_RANGE_ADVICE, contactMandatory,
 } from "./participant-advice";
 import { BP_ADVICE_PARAGRAPHS } from "./bp-protocol";
 
@@ -27,9 +27,14 @@ test("pregnant at or below 135/85 gets in-range advice", () => {
   assert.equal(r.band, "Green");
 });
 
-test("no contact route changes amber/red advice only", () => {
+test("no contact route changes amber advice only; red keeps the card wording", () => {
   assert.equal(participantAdvice({ systolic: 160, diastolic: 80, noContactRoute: true }).pathway, "NoContactRoute");
-  assert.equal(participantAdvice({ systolic: 185, diastolic: 80, noContactRoute: true }).pathway, "NoContactRoute");
+  const red = participantAdvice({ systolic: 185, diastolic: 80, noContactRoute: true });
+  assert.equal(red.pathway, "Standard");
+  assert.deepEqual(red.paragraphs, BP_ADVICE_PARAGRAPHS.Red);
+  assert.equal(contactMandatory("Red"), true);
+  assert.equal(contactMandatory("Amber"), false);
+  assert.equal(contactMandatory("Red", true), false);
   const y = participantAdvice({ systolic: 140, diastolic: 80, noContactRoute: true });
   assert.equal(y.pathway, "Standard");
   assert.deepEqual(y.paragraphs, BP_ADVICE_PARAGRAPHS.Yellow);

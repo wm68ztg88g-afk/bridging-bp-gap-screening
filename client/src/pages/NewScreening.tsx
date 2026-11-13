@@ -17,7 +17,7 @@ import {
 import { BpGuidance, EmergencyAdvice } from "@/components/BpGuidance";
 import {
   ageOn, MIN_AGE, ftInToCm, stLbToKg, HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, needsContactRoute,
-  LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS, SITE_OPTIONS, EMHIP_SITE, participantAdvice,
+  LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS, SITE_OPTIONS, EMHIP_SITE, participantAdvice, contactMandatory,
 } from "@shared/participant-advice";
 import { classifyBp } from "@shared/bp-protocol";
 import { useStore } from "@/lib/store";
@@ -220,6 +220,7 @@ export default function NewScreening() {
 
   const contactNeeded = avg !== null && needsContactRoute(avg.category, isPregnant);
   const hasContact = !!form.phone.trim() || !!form.altContact.trim();
+  const contactRequired = avg !== null && contactMandatory(avg.category, isPregnant);
 
   function validateStep(i: number): string | null {
     if (i === 0) {
@@ -257,6 +258,8 @@ export default function NewScreening() {
       if (nums.some((n) => !n.trim())) return "Enter all three blood pressure readings.";
       if (nums.some((n) => !Number.isInteger(Number(n)) || Number(n) <= 0))
         return "Blood pressure readings must be positive whole numbers.";
+      if (contactRequired && !hasContact)
+        return "Red result: the SGH team must be able to contact them. Add a phone number or another way to reach them (e.g. via their GP or the venue).";
       if (contactNeeded && !hasContact && !form.noContactRoute)
         return "Add a phone number or other way to contact them, or tick that they gave none.";
       if (!form.heightMethod) return "Choose how height was obtained (or Declined).";
@@ -340,7 +343,7 @@ export default function NewScreening() {
         postcode: form.postcode.trim().toUpperCase(),
         phone: form.phone.trim() || null,
         altContact: form.altContact.trim() || null,
-        noContactRoute: contactNeeded && !hasContact ? form.noContactRoute : false,
+        noContactRoute: contactNeeded && !contactRequired && !hasContact ? form.noContactRoute : false,
         symptomsReported: form.symptomsNow === "yes",
         pregnant: isPregnant,
         lastBpCheck: form.lastBpCheck,
@@ -400,7 +403,7 @@ export default function NewScreening() {
                 {form.patientName}'s record has been added.
               </p>
             </div>
-            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant} noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant} noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
             <EmergencyAdvice />
             <div className="flex flex-col gap-2 pt-2">
               <Button
@@ -715,7 +718,7 @@ export default function NewScreening() {
             </Card>
 
             {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
-              noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
+              noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
 
             {contactNeeded && !form.phone.trim() && (
               <Card className="border-orange-600">
@@ -731,10 +734,15 @@ export default function NewScreening() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="alt">Or another way to reach them</Label>
-                    <Input id="alt" data-testid="input-alt-contact" placeholder="e.g. email, or message via the venue"
+                    <Input id="alt" data-testid="input-alt-contact" placeholder="e.g. email, via their GP, or via the venue"
                       value={form.altContact} onChange={(e) => set("altContact", e.target.value)} />
                   </div>
-                  {!hasContact && (
+                  {contactRequired && (
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300" data-testid="text-red-contact-required">
+                      Red result: a contact route is required. The SGH team will contact them within 24–48 hours.
+                    </p>
+                  )}
+                  {!hasContact && !contactRequired && (
                     <div className="flex items-start gap-2 rounded-md border border-border p-3">
                       <Checkbox id="nocontact" checked={form.noContactRoute}
                         onCheckedChange={(c) => set("noContactRoute", !!c)} data-testid="checkbox-no-contact" />
@@ -898,7 +906,7 @@ export default function NewScreening() {
         {step === 4 && (
           <div className="space-y-5">
             {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
-              noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
+              noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Review</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">
