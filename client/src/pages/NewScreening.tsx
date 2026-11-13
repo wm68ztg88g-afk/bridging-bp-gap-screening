@@ -15,11 +15,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { BpGuidance, EmergencyAdvice } from "@/components/BpGuidance";
+import {
+  ageOn, MIN_AGE, ftInToCm, stLbToKg, HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, needsContactRoute,
+  LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS, SITE_OPTIONS, EMHIP_SITE, participantAdvice,
+} from "@shared/participant-advice";
 import { classifyBp } from "@shared/bp-protocol";
 import { useStore } from "@/lib/store";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check, Loader2, Phone } from "lucide-react";
 
 const ETHNICITY_OPTIONS = [
   "White - English/Welsh/Scottish/N.Irish/British",
@@ -51,11 +55,28 @@ const CONDITION_OPTIONS = [
   "Heart disease (angina, heart attack, heart failure)",
   "Atrial fibrillation / irregular pulse",
   "High cholesterol",
-  "Currently pregnant",
 ];
+const OTHER_SITE = "Other";
 
 interface FormState {
+  symptomsNow: "yes" | "no" | "";
+  symptomsAcknowledged: boolean;
   hubLocation: string;
+  hubOther: string;
+  lastBpCheck: string;
+  checkedBefore: string;
+  pregnant: "yes" | "no" | "";
+  altContact: string;
+  noContactRoute: boolean;
+  heightMethod: string;
+  heightUnit: "cm" | "ftin";
+  heightFt: string;
+  heightIn: string;
+  weightMethod: string;
+  weightUnit: "kg" | "stlb";
+  weightSt: string;
+  weightLb: string;
+  waistDeclined: boolean;
   patientName: string;
   dob: string;
   sex: string;
@@ -89,7 +110,24 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
+  symptomsNow: "",
+  symptomsAcknowledged: false,
   hubLocation: "",
+  hubOther: "",
+  lastBpCheck: "",
+  checkedBefore: "",
+  pregnant: "",
+  altContact: "",
+  noContactRoute: false,
+  heightMethod: "",
+  heightUnit: "cm",
+  heightFt: "",
+  heightIn: "",
+  weightMethod: "",
+  weightUnit: "kg",
+  weightSt: "",
+  weightLb: "",
+  waistDeclined: false,
   patientName: "",
   dob: "",
   sex: "",
@@ -122,7 +160,7 @@ const EMPTY: FormState = {
   consentGpContact: false,
 };
 
-const STEPS = ["Consent", "Patient details", "BP & measurements", "Medical history", "Review & submit"];
+const STEPS = ["Consent", "Participant details", "BP & measurements", "Medical history", "Review & submit"];
 
 export default function NewScreening() {
   const { volunteer } = useStore();
@@ -153,31 +191,64 @@ export default function NewScreening() {
     return { avgSys, avgDia, ...classifyBp(avgSys, avgDia) };
   }, [form.bp2Systolic, form.bp3Systolic, form.bp2Diastolic, form.bp3Diastolic]);
 
+  const showPregnancy = form.sex !== "" && form.sex !== "Male";
+  const isPregnant = showPregnancy && form.pregnant === "yes";
+  const site = form.hubLocation === OTHER_SITE ? form.hubOther.trim() : form.hubLocation;
+  const atEmhip = site === EMHIP_SITE;
+
+  // Height/weight in cm/kg whatever unit was entered; null if declined or blank.
+  const heightCm = useMemo(() => {
+    if (form.heightMethod === "" || form.heightMethod === "Declined") return null;
+    if (form.heightUnit === "cm") { const n = parseFloat(form.heightCm); return Number.isFinite(n) ? n : null; }
+    const ft = parseFloat(form.heightFt), inch = form.heightIn.trim() ? parseFloat(form.heightIn) : 0;
+    return Number.isFinite(ft) && Number.isFinite(inch) ? ftInToCm(ft, inch) : null;
+  }, [form.heightMethod, form.heightUnit, form.heightCm, form.heightFt, form.heightIn]);
+
+  const weightKg = useMemo(() => {
+    if (form.weightMethod === "" || form.weightMethod === "Declined") return null;
+    if (form.weightUnit === "kg") { const n = parseFloat(form.weightKg); return Number.isFinite(n) ? n : null; }
+    const st = parseFloat(form.weightSt), lb = form.weightLb.trim() ? parseFloat(form.weightLb) : 0;
+    return Number.isFinite(st) && Number.isFinite(lb) ? stLbToKg(st, lb) : null;
+  }, [form.weightMethod, form.weightUnit, form.weightKg, form.weightSt, form.weightLb]);
+
   const bmi = useMemo(() => {
-    const h = parseFloat(form.heightCm);
-    const w = parseFloat(form.weightKg);
-    if (!h || !w) return null;
-    const m = h / 100;
-    return Math.round((w / (m * m)) * 10) / 10;
-  }, [form.heightCm, form.weightKg]);
+    if (!heightCm || !weightKg) return null;
+    const m = heightCm / 100;
+    return Math.round((weightKg / (m * m)) * 10) / 10;
+  }, [heightCm, weightKg]);
+  const bmiEstimated = bmi !== null && (form.heightMethod !== "Measured" || form.weightMethod !== "Measured");
+
+  const contactNeeded = avg !== null && needsContactRoute(avg.category, isPregnant);
+  const hasContact = !!form.phone.trim() || !!form.altContact.trim();
 
   function validateStep(i: number): string | null {
     if (i === 0) {
       if (!form.consentToContact)
-        return "The patient must agree to their details being recorded before you continue.";
+        return "The participant must agree to their details being recorded before you continue.";
+      if (!form.symptomsNow) return "Ask about symptoms before you continue.";
+      if (form.symptomsNow === "yes" && !form.symptomsAcknowledged)
+        return "Call 999 first. Tick the box once 999 has been called if you need to continue recording.";
     }
     if (i === 1) {
-      if (!form.patientName.trim()) return "Enter the patient's name.";
+      if (!form.hubLocation) return "Select the screening location.";
+      if (form.hubLocation === OTHER_SITE && !form.hubOther.trim()) return "Type the name of the screening location.";
+      if (!form.patientName.trim()) return "Enter the participant's name.";
       if (!form.dob) return "Enter the date of birth.";
+      const age = ageOn(form.dob);
+      if (!Number.isFinite(age) || age > 120 || age < 0) return "Check the date of birth.";
+      if (age < MIN_AGE) return "Checks are for adults aged 18 and over only. Please do not record this person.";
       if (!form.sex) return "Select a sex.";
       if (!form.ethnicity) return "Select an ethnicity.";
       if (!form.postcode.trim()) return "Enter a postcode.";
-      if (!form.registeredWithGp) return "Say whether the patient is registered with a GP.";
+      if (!form.registeredWithGp) return "Say whether the participant is registered with a GP.";
       if (form.registeredWithGp === "yes" && !form.gpPractice.trim())
         return "Enter the GP practice name.";
-      if (!form.enrolledWithEmhip) return "Select Yes or No for Enrolled with EMHIP.";
+      if (atEmhip && !form.enrolledWithEmhip) return "Select Yes or No for Enrolled with EMHIP.";
+      if (!form.checkedBefore) return "Say whether they have been checked by this programme before.";
+      if (!form.lastBpCheck) return "Ask when their blood pressure was last checked.";
     }
     if (i === 2) {
+      if (showPregnancy && !form.pregnant) return "Ask whether the participant is currently pregnant.";
       const nums = [
         form.bp1Systolic, form.bp1Diastolic,
         form.bp2Systolic, form.bp2Diastolic,
@@ -186,16 +257,29 @@ export default function NewScreening() {
       if (nums.some((n) => !n.trim())) return "Enter all three blood pressure readings.";
       if (nums.some((n) => !Number.isInteger(Number(n)) || Number(n) <= 0))
         return "Blood pressure readings must be positive whole numbers.";
-      if (!form.heightCm.trim() || !form.weightKg.trim()) return "Enter height and weight.";
-      if (![Number(form.heightCm), Number(form.weightKg)].every((n) => Number.isFinite(n) && n > 0))
-        return "Height and weight must be positive numbers.";
+      if (contactNeeded && !hasContact && !form.noContactRoute)
+        return "Add a phone number or other way to contact them, or tick that they gave none.";
+      if (!form.heightMethod) return "Choose how height was obtained (or Declined).";
+      if (form.heightMethod !== "Declined") {
+        if (heightCm === null) return "Enter the height.";
+        if (heightCm < HEIGHT_RANGE_CM.min || heightCm > HEIGHT_RANGE_CM.max) return "Check the height — it looks out of range.";
+      }
+      if (!form.weightMethod) return "Choose how weight was obtained (or Declined).";
+      if (form.weightMethod !== "Declined") {
+        if (weightKg === null) return "Enter the weight.";
+        if (weightKg < WEIGHT_RANGE_KG.min || weightKg > WEIGHT_RANGE_KG.max) return "Check the weight — it looks out of range.";
+      }
+      if (!form.waistDeclined && form.waistCm.trim()) {
+        const w = Number(form.waistCm);
+        if (!Number.isFinite(w) || w < 40 || w > 250) return "Check the waist measurement — it looks out of range.";
+      }
     }
     if (i === 3) {
-      if (!form.knownHypertension) return "Say whether the patient has known hypertension.";
+      if (!form.knownHypertension) return "Say whether the participant has known hypertension.";
       if (!form.smokingStatus) return "Select a smoking status.";
     }
     if (i === 4) {
-      if (!form.consentToContact) return "Patient consent to be contacted is required before submitting.";
+      if (!form.consentToContact) return "Participant consent is required before submitting.";
     }
     return null;
   }
@@ -218,7 +302,7 @@ export default function NewScreening() {
         const data = await res.json();
         setDuplicateWarning(
           data.duplicate
-            ? `A screening for this patient already exists (recorded ${new Date(data.existingDate).toLocaleDateString("en-GB")}). You can still continue if this is a genuine repeat visit.`
+            ? `A screening for someone with this name and date of birth already exists (recorded ${new Date(data.existingDate).toLocaleDateString("en-GB")}). You can still continue if this is a genuine repeat visit.`
             : null
         );
       } catch {
@@ -242,11 +326,12 @@ export default function NewScreening() {
     setSubmitting(true);
     try {
       const otherConditions = [...form.otherConditions];
+      if (isPregnant) otherConditions.push("Currently pregnant");
       if (form.otherConditionsText.trim()) otherConditions.push(form.otherConditionsText.trim());
 
       await apiRequest("POST", "/api/screenings", {
         volunteerCode: volunteer.code,
-        hubLocation: form.hubLocation || null,
+        hubLocation: site,
         screeningDate: new Date().toISOString(),
         patientName: form.patientName.trim(),
         dob: form.dob,
@@ -254,11 +339,17 @@ export default function NewScreening() {
         ethnicity: form.ethnicity,
         postcode: form.postcode.trim().toUpperCase(),
         phone: form.phone.trim() || null,
+        altContact: form.altContact.trim() || null,
+        noContactRoute: contactNeeded && !hasContact ? form.noContactRoute : false,
+        symptomsReported: form.symptomsNow === "yes",
+        pregnant: isPregnant,
+        lastBpCheck: form.lastBpCheck,
+        checkedBefore: form.checkedBefore,
         preferredLanguage: form.preferredLanguage.trim() || null,
         interpreterNeeded: form.interpreterNeeded,
         registeredWithGp: form.registeredWithGp === "yes",
         gpPractice: form.registeredWithGp === "yes" ? form.gpPractice.trim() : null,
-        enrolledWithEmhip: form.enrolledWithEmhip === "yes",
+        enrolledWithEmhip: atEmhip ? form.enrolledWithEmhip === "yes" : null,
         bp1Systolic: parseInt(form.bp1Systolic),
         bp1Diastolic: parseInt(form.bp1Diastolic),
         bp2Systolic: parseInt(form.bp2Systolic),
@@ -266,9 +357,12 @@ export default function NewScreening() {
         bp3Systolic: parseInt(form.bp3Systolic),
         bp3Diastolic: parseInt(form.bp3Diastolic),
         heartRate: form.heartRate ? parseInt(form.heartRate) : null,
-        heightCm: parseFloat(form.heightCm),
-        weightKg: parseFloat(form.weightKg),
-        waistCm: form.waistCm.trim() ? parseFloat(form.waistCm) : null,
+        heightMethod: form.heightMethod,
+        weightMethod: form.weightMethod,
+        heightCm,
+        weightKg,
+        waistCm: !form.waistDeclined && form.waistCm.trim() ? parseFloat(form.waistCm) : null,
+        waistDeclined: form.waistDeclined,
         knownHypertension: form.knownHypertension === "yes",
         currentMedications: form.knownHypertension === "yes" ? form.currentMedications.trim() || null : null,
         otherConditions: JSON.stringify(otherConditions),
@@ -306,7 +400,7 @@ export default function NewScreening() {
                 {form.patientName}'s record has been added.
               </p>
             </div>
-            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant} noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
             <EmergencyAdvice />
             <div className="flex flex-col gap-2 pt-2">
               <Button
@@ -318,7 +412,7 @@ export default function NewScreening() {
                 }}
                 data-testid="button-add-another"
               >
-                Record another patient
+                Record another participant
               </Button>
               <Button variant="outline" onClick={() => navigate("/")} data-testid="button-done">
                 Done for now
@@ -379,11 +473,11 @@ export default function NewScreening() {
               <CardHeader className="pb-3"><CardTitle className="text-base">Before you start</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Please read this to the patient (or explain in your own words) before recording any of their
-                  details. The information collected here is used only to support this patient's care and to
+                  Please read this to the participant (or explain in your own words) before recording any of their
+                  details. The information collected here is used only to support this participant's care and to
                   evaluate the Bridging the BP Gap programme. It is stored securely and can only be accessed by
                   the programme's clinical lead and directly-involved St George's Hospital project team members
-                  — it will not be shared with anyone else without the patient's permission, except where the law
+                  — it will not be shared with anyone else without the participant's permission, except where the law
                   requires it (for example, a safeguarding concern). Records are kept for the duration of the
                   programme and for up to two years afterwards to allow for evaluation and audit, after which
                   they are securely deleted. Taking part is voluntary, and they can ask you to stop at any time
@@ -393,10 +487,40 @@ export default function NewScreening() {
                   <Checkbox id="consent" checked={form.consentToContact}
                     onCheckedChange={(c) => set("consentToContact", !!c)} data-testid="checkbox-consent" />
                   <Label htmlFor="consent" className="font-normal text-sm leading-relaxed">
-                    The patient has agreed that their details and readings can be recorded and that a member of
+                    The participant has agreed that their details and readings can be recorded and that a member of
                     the clinical team may contact them about their blood pressure. *
                   </Label>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Symptoms check *</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm leading-relaxed">
+                  Ask: <strong>“Do you have chest pain, sudden weakness or numbness, blurred or lost vision,
+                  confusion or difficulty breathing right now?”</strong>
+                </p>
+                <RadioGroup value={form.symptomsNow} onValueChange={(v) => set("symptomsNow", v as any)} className="grid grid-cols-2 gap-3" data-testid="radio-group-symptoms">
+                  <Label htmlFor="sym-no" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 font-normal">
+                    <RadioGroupItem value="no" id="sym-no" data-testid="radio-symptoms-no" /> No
+                  </Label>
+                  <Label htmlFor="sym-yes" className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 font-normal">
+                    <RadioGroupItem value="yes" id="sym-yes" data-testid="radio-symptoms-yes" /> Yes
+                  </Label>
+                </RadioGroup>
+                {form.symptomsNow === "yes" && (
+                  <div className="rounded-md border-2 border-red-700 bg-red-50 p-4 text-red-950 dark:bg-red-950 dark:text-red-100 space-y-3" data-testid="panel-call-999">
+                    <p className="flex items-center gap-2 text-lg font-bold"><Phone className="w-5 h-5" /> Call 999 now.</p>
+                    <p className="text-sm">Do not take their blood pressure first. Stay with them until help arrives.</p>
+                    <div className="flex items-start gap-2 rounded-md border border-red-700/40 bg-white/60 dark:bg-black/20 p-3">
+                      <Checkbox id="sym-ack" checked={form.symptomsAcknowledged}
+                        onCheckedChange={(c) => set("symptomsAcknowledged", !!c)} data-testid="checkbox-999-called" />
+                      <Label htmlFor="sym-ack" className="font-normal text-sm leading-relaxed">
+                        999 has been called. Continue only if it is safe and appropriate to record their details.
+                      </Label>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -405,9 +529,18 @@ export default function NewScreening() {
         {step === 1 && (
           <div className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="hub">Screening location (optional)</Label>
-              <Input id="hub" data-testid="input-hub" placeholder="e.g. WCEN Community Hub"
-                value={form.hubLocation} onChange={(e) => set("hubLocation", e.target.value)} />
+              <Label>Screening location *</Label>
+              <Select value={form.hubLocation} onValueChange={(v) => set("hubLocation", v)}>
+                <SelectTrigger data-testid="select-hub"><SelectValue placeholder="Select location" /></SelectTrigger>
+                <SelectContent>
+                  {SITE_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  <SelectItem value={OTHER_SITE}>Other (type below)</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.hubLocation === OTHER_SITE && (
+                <Input data-testid="input-hub-other" placeholder="Name of venue" value={form.hubOther}
+                  onChange={(e) => set("hubOther", e.target.value)} />
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="patientName">Full name *</Label>
@@ -488,7 +621,7 @@ export default function NewScreening() {
                   onChange={(e) => set("gpPractice", e.target.value)} />
               </div>
             )}
-            <fieldset className="space-y-2 rounded-md border border-border p-3">
+            {atEmhip && <fieldset className="space-y-2 rounded-md border border-border p-3">
               <legend id="emhip-label" className="px-1 text-sm font-medium">Enrolled with EMHIP? *</legend>
               <RadioGroup
                 aria-labelledby="emhip-label"
@@ -507,12 +640,47 @@ export default function NewScreening() {
                   No
                 </Label>
               </RadioGroup>
-            </fieldset>
+            </fieldset>}
+            <div className="space-y-2">
+              <Label>Checked by this programme before? *</Label>
+              <RadioGroup value={form.checkedBefore} onValueChange={(v) => set("checkedBefore", v)} className="flex flex-wrap gap-6" data-testid="radio-group-checked-before">
+                {CHECKED_BEFORE_OPTIONS.map((o) => (
+                  <div key={o} className="flex items-center gap-2">
+                    <RadioGroupItem value={o} id={`cb-${o}`} data-testid={`radio-checked-before-${o.toLowerCase().replace(/\s+/g, "-")}`} />
+                    <Label htmlFor={`cb-${o}`} className="font-normal">{o}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label>When was their blood pressure last checked (anywhere)? *</Label>
+              <Select value={form.lastBpCheck} onValueChange={(v) => set("lastBpCheck", v)}>
+                <SelectTrigger data-testid="select-last-bp-check"><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  {LAST_BP_CHECK_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="space-y-5">
+            {showPregnancy && (
+              <div className="space-y-2">
+                <Label>Is the participant currently pregnant? *</Label>
+                <RadioGroup value={form.pregnant} onValueChange={(v) => set("pregnant", v as any)} className="flex gap-6" data-testid="radio-group-pregnant">
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="no" id="preg-no" data-testid="radio-pregnant-no" />
+                    <Label htmlFor="preg-no" className="font-normal">No</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="yes" id="preg-yes" data-testid="radio-pregnant-yes" />
+                    <Label htmlFor="preg-yes" className="font-normal">Yes</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Blood pressure — 3 readings</CardTitle>
@@ -546,30 +714,108 @@ export default function NewScreening() {
               </CardContent>
             </Card>
 
-            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
+              noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="height">Height (cm) *</Label>
-                <Input id="height" data-testid="input-height" inputMode="decimal" value={form.heightCm}
-                  onChange={(e) => set("heightCm", e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="weight">Weight (kg) *</Label>
-                <Input id="weight" data-testid="input-weight" inputMode="decimal" value={form.weightKg}
-                  onChange={(e) => set("weightKg", e.target.value)} />
-              </div>
-            </div>
+            {contactNeeded && !form.phone.trim() && (
+              <Card className="border-orange-600">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">How can the SGH team contact them? *</CardTitle>
+                  <CardDescription>No phone number was given. The team needs a way to reach them about this reading.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone2">Phone number</Label>
+                    <Input id="phone2" type="tel" data-testid="input-phone-followup" value={form.phone}
+                      onChange={(e) => set("phone", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="alt">Or another way to reach them</Label>
+                    <Input id="alt" data-testid="input-alt-contact" placeholder="e.g. email, or message via the venue"
+                      value={form.altContact} onChange={(e) => set("altContact", e.target.value)} />
+                  </div>
+                  {!hasContact && (
+                    <div className="flex items-start gap-2 rounded-md border border-border p-3">
+                      <Checkbox id="nocontact" checked={form.noContactRoute}
+                        onCheckedChange={(c) => set("noContactRoute", !!c)} data-testid="checkbox-no-contact" />
+                      <Label htmlFor="nocontact" className="font-normal text-sm leading-relaxed">
+                        They do not want to give any contact details. They will be told to arrange follow-up themselves.
+                      </Label>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <MeasureField
+              label="Height"
+              methodOptions={["Measured", "Stated by participant", "Declined"]}
+              method={form.heightMethod}
+              onMethod={(v) => set("heightMethod", v)}
+              unit={form.heightUnit}
+              units={[{ value: "cm", label: "cm" }, { value: "ftin", label: "ft / in" }]}
+              onUnit={(v) => set("heightUnit", v as any)}
+              testId="height"
+            >
+              {form.heightUnit === "cm" ? (
+                <Input aria-label="Height in cm" data-testid="input-height" inputMode="decimal" placeholder="cm"
+                  value={form.heightCm} onChange={(e) => set("heightCm", e.target.value)} />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input aria-label="Feet" data-testid="input-height-ft" inputMode="numeric" placeholder="ft"
+                    value={form.heightFt} onChange={(e) => set("heightFt", e.target.value)} />
+                  <Input aria-label="Inches" data-testid="input-height-in" inputMode="decimal" placeholder="in"
+                    value={form.heightIn} onChange={(e) => set("heightIn", e.target.value)} />
+                </div>
+              )}
+            </MeasureField>
+
+            <MeasureField
+              label="Weight"
+              methodOptions={["Measured", "Estimated by participant", "Declined"]}
+              method={form.weightMethod}
+              onMethod={(v) => set("weightMethod", v)}
+              unit={form.weightUnit}
+              units={[{ value: "kg", label: "kg" }, { value: "stlb", label: "st / lb" }]}
+              onUnit={(v) => set("weightUnit", v as any)}
+              testId="weight"
+            >
+              {form.weightUnit === "kg" ? (
+                <Input aria-label="Weight in kg" data-testid="input-weight" inputMode="decimal" placeholder="kg"
+                  value={form.weightKg} onChange={(e) => set("weightKg", e.target.value)} />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input aria-label="Stones" data-testid="input-weight-st" inputMode="numeric" placeholder="st"
+                    value={form.weightSt} onChange={(e) => set("weightSt", e.target.value)} />
+                  <Input aria-label="Pounds" data-testid="input-weight-lb" inputMode="decimal" placeholder="lb"
+                    value={form.weightLb} onChange={(e) => set("weightLb", e.target.value)} />
+                </div>
+              )}
+            </MeasureField>
+
             <div className="space-y-2">
               <Label htmlFor="waist">Waist circumference (cm)</Label>
-              <Input id="waist" data-testid="input-waist" inputMode="decimal" value={form.waistCm}
-                onChange={(e) => set("waistCm", e.target.value)} />
+              <div className="flex items-center gap-3">
+                <Input id="waist" data-testid="input-waist" inputMode="decimal" value={form.waistDeclined ? "" : form.waistCm}
+                  disabled={form.waistDeclined} onChange={(e) => set("waistCm", e.target.value)} className="max-w-40" />
+                <div className="flex items-center gap-2">
+                  <Checkbox id="waist-declined" checked={form.waistDeclined}
+                    onCheckedChange={(c) => set("waistDeclined", !!c)} data-testid="checkbox-waist-declined" />
+                  <Label htmlFor="waist-declined" className="font-normal text-sm">Declined</Label>
+                </div>
+              </div>
             </div>
             {bmi !== null && (
               <div className="flex items-center justify-between rounded-md bg-muted/50 border border-border px-3 py-2">
-                <span className="text-sm text-muted-foreground">Calculated BMI</span>
+                <span className="text-sm text-muted-foreground">{bmiEstimated ? "BMI (estimated)" : "Calculated BMI"}</span>
                 <span className="text-base font-semibold tabular-nums" data-testid="text-bmi">{bmi}</span>
               </div>
+            )}
+            {heightCm !== null && form.heightUnit === "ftin" && (
+              <p className="text-xs text-muted-foreground">Height saved as {heightCm} cm.</p>
+            )}
+            {weightKg !== null && form.weightUnit === "stlb" && (
+              <p className="text-xs text-muted-foreground">Weight saved as {weightKg} kg.</p>
             )}
           </div>
         )}
@@ -651,18 +897,27 @@ export default function NewScreening() {
 
         {step === 4 && (
           <div className="space-y-5">
-            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} />}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
+              noContactRoute={contactNeeded && !hasContact && form.noContactRoute} />}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Review</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <ReviewRow label="Patient" value={`${form.patientName} · DOB ${form.dob}`} />
+                <ReviewRow label="Participant" value={`${form.patientName} · DOB ${form.dob}`} />
+                <ReviewRow label="Location" value={site || "—"} />
+                {form.symptomsNow === "yes" && <ReviewRow label="Symptoms" value="Reported — 999 called" />}
                 <ReviewRow label="Sex / Ethnicity" value={`${form.sex} · ${form.ethnicity}`} />
                 <ReviewRow label="Postcode" value={form.postcode} />
                 <ReviewRow label="GP" value={form.registeredWithGp === "yes" ? form.gpPractice : "Not registered"} />
-                <ReviewRow label="Enrolled with EMHIP" value={form.enrolledWithEmhip === "yes" ? "Yes" : form.enrolledWithEmhip === "no" ? "No" : "Not recorded"} />
+                {atEmhip && <ReviewRow label="Enrolled with EMHIP" value={form.enrolledWithEmhip === "yes" ? "Yes" : "No"} />}
+                <ReviewRow label="Contact" value={form.phone.trim() || form.altContact.trim() || (form.noContactRoute ? "None given" : "—")} />
+                <ReviewRow label="Last BP check" value={form.lastBpCheck || "—"} />
+                <ReviewRow label="Checked by programme before" value={form.checkedBefore || "—"} />
+                {showPregnancy && <ReviewRow label="Pregnant" value={isPregnant ? "Yes" : "No"} />}
                 <ReviewRow label="BP average" value={avg ? `${avg.avgSys}/${avg.avgDia} mmHg (${avg.category})` : "—"} />
-                <ReviewRow label="BMI" value={bmi !== null ? String(bmi) : "—"} />
-                <ReviewRow label="Waist" value={form.waistCm.trim() ? `${form.waistCm} cm` : "—"} />
+                <ReviewRow label="Height" value={form.heightMethod === "Declined" ? "Declined" : heightCm !== null ? `${heightCm} cm (${form.heightMethod.toLowerCase()})` : "—"} />
+                <ReviewRow label="Weight" value={form.weightMethod === "Declined" ? "Declined" : weightKg !== null ? `${weightKg} kg (${form.weightMethod.toLowerCase()})` : "—"} />
+                <ReviewRow label={bmiEstimated ? "BMI (estimated)" : "BMI"} value={bmi !== null ? String(bmi) : "Not calculated"} />
+                <ReviewRow label="Waist" value={form.waistDeclined ? "Declined" : form.waistCm.trim() ? `${form.waistCm} cm` : "—"} />
                 <ReviewRow label="Known hypertension" value={form.knownHypertension === "yes" ? "Yes" : "No"} />
                 <ReviewRow
                   label="Other conditions"
@@ -675,7 +930,7 @@ export default function NewScreening() {
               <CardHeader className="pb-3"><CardTitle className="text-base">Consent</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Confirmed at the start of this screening: the patient has agreed that their details and
+                  Confirmed at the start of this screening: the participant has agreed that their details and
                   readings can be recorded and that a member of the clinical team may contact them about their
                   blood pressure.
                 </p>
@@ -685,7 +940,7 @@ export default function NewScreening() {
                     <Checkbox id="consent-gp" checked={form.consentGpContact}
                       onCheckedChange={(c) => set("consentGpContact", !!c)} data-testid="checkbox-consent-gp" />
                     <Label htmlFor="consent-gp" className="font-normal text-sm leading-relaxed">
-                      The patient has agreed that their GP practice may be informed of these results if the
+                      The participant has agreed that their GP practice may be informed of these results if the
                       clinical team feels it is appropriate (optional).
                     </Label>
                   </div>
@@ -715,6 +970,48 @@ export default function NewScreening() {
         </div>
       </div>
     </div>
+  );
+}
+
+function MeasureField({
+  label, methodOptions, method, onMethod, unit, units, onUnit, testId, children,
+}: {
+  label: string;
+  methodOptions: string[];
+  method: string;
+  onMethod: (v: string) => void;
+  unit: string;
+  units: { value: string; label: string }[];
+  onUnit: (v: string) => void;
+  testId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="space-y-2 rounded-md border border-border p-3">
+      <legend className="px-1 text-sm font-medium">{label} *</legend>
+      <RadioGroup value={method} onValueChange={onMethod} className="flex flex-wrap gap-x-5 gap-y-2" data-testid={`radio-group-${testId}-method`}>
+        {methodOptions.map((o) => (
+          <div key={o} className="flex items-center gap-2">
+            <RadioGroupItem value={o} id={`${testId}-${o}`} data-testid={`radio-${testId}-${o.split(" ")[0].toLowerCase()}`} />
+            <Label htmlFor={`${testId}-${o}`} className="font-normal text-sm">{o}</Label>
+          </div>
+        ))}
+      </RadioGroup>
+      {method && method !== "Declined" && (
+        <div className="flex items-start gap-3 pt-1">
+          <div className="flex-1">{children}</div>
+          <div className="flex rounded-md border border-border overflow-hidden shrink-0" role="group" aria-label={`${label} units`}>
+            {units.map((u) => (
+              <button key={u.value} type="button" onClick={() => onUnit(u.value)}
+                className={`px-3 h-9 text-sm ${unit === u.value ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground"}`}
+                data-testid={`button-${testId}-unit-${u.value}`} aria-pressed={unit === u.value}>
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </fieldset>
   );
 }
 

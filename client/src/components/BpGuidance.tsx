@@ -1,4 +1,5 @@
-import { classifyBp, BP_THRESHOLDS, BP_ADVICE_PARAGRAPHS, EMERGENCY_ADVICE, type BpBand } from "@shared/bp-protocol";
+import { BP_THRESHOLDS, EMERGENCY_ADVICE, type BpBand } from "@shared/bp-protocol";
+import { participantAdvice } from "@shared/participant-advice";
 
 export const BP_BAND_STYLES: Record<BpBand, string> = {
   Green: "border-green-600 bg-green-100 text-green-950 dark:border-green-500 dark:bg-green-950 dark:text-green-100",
@@ -32,8 +33,11 @@ export function EmergencyAdvice() {
   );
 }
 
-export function BpGuidance({ systolic, diastolic }: { systolic: number; diastolic: number }) {
-  const result = classifyBp(systolic, diastolic);
+export function BpGuidance({ systolic, diastolic, pregnant, noContactRoute }: {
+  systolic: number; diastolic: number; pregnant?: boolean; noContactRoute?: boolean;
+}) {
+  const advice = participantAdvice({ systolic, diastolic, pregnant, noContactRoute });
+  const result = { category: advice.band };
   return (
     <section className={`rounded-md border border-l-[6px] p-3 space-y-2 text-left ${BP_BAND_STYLES[result.category]}`}
       data-testid="panel-bp-result" aria-live="polite">
@@ -43,14 +47,17 @@ export function BpGuidance({ systolic, diastolic }: { systolic: number; diastoli
       </div>
       <BpBandBadge band={result.category} testId="badge-bp-category" />
       <p className="text-xs">{BP_THRESHOLDS[result.category]} • Use the higher band.</p>
+      {advice.pathway === "Maternity" && (
+        <p className="text-sm font-semibold" data-testid="pregnancy-flag">Pregnant: blood pressure above 135/85 — maternity advice applies.</p>
+      )}
       <div className="space-y-3 text-base leading-relaxed" data-testid="bp-action">
-        {BP_ADVICE_PARAGRAPHS[result.category].map((paragraph) => (
-          <p key={paragraph}>{paragraph.split(/(within 4 weeks of screening|within 4 weeks|within 1 month|in the next 24–48 hours)/g).map((part, i) =>
+        {advice.paragraphs.map((paragraph) => (
+          <p key={paragraph}>{paragraph.split(/(within 4 weeks of screening|within 4 weeks|within 1 month|in the next 24–48 hours|today)/g).map((part, i) =>
             i % 2 ? <strong key={i}>{part}</strong> : part
           )}</p>
         ))}
       </div>
-      {(result.category === "Amber" || result.category === "Red") && (
+      {(result.category === "Amber" || result.category === "Red") && advice.pathway === "Standard" && (
         <p className="text-xs" data-testid="sgh-definition">SGH = St George’s Hospital.</p>
       )}
       <p className="text-xs">A screening check is not a diagnosis.</p>

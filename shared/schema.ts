@@ -2,6 +2,10 @@ import { pgTable, text, integer, real, boolean, serial } from "drizzle-orm/pg-co
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { FOLLOW_UP_STATUSES, RESULT_OPTIONS } from "./followup";
+import {
+  MEASURE_METHODS, WEIGHT_METHODS, LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS,
+  HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, MIN_AGE, ageOn, EMHIP_SITE,
+} from "./participant-advice";
 
 // ---------------------------------------------------------------------------
 // Volunteers — trained & DBS-cleared community volunteers who collect data
@@ -60,10 +64,24 @@ export const screenings = pgTable("screenings", {
   heartRate: integer("heart_rate"),
 
   // Anthropometrics
-  heightCm: real("height_cm").notNull(),
-  weightKg: real("weight_kg").notNull(),
+  // Nullable since 13 Nov 2026: height, weight and waist may be declined.
+  heightCm: real("height_cm"),
+  weightKg: real("weight_kg"),
   waistCm: real("waist_cm"),
-  bmi: real("bmi").notNull(),
+  bmi: real("bmi"),
+  heightMethod: text("height_method"),   // Measured | Stated by participant | Declined
+  weightMethod: text("weight_method"),   // Measured | Estimated by participant | Declined
+  waistDeclined: boolean("waist_declined"),
+  bmiEstimated: boolean("bmi_estimated"),
+
+  // Safety and reach (added 13 Nov 2026; null on earlier records)
+  symptomsReported: boolean("symptoms_reported"),
+  pregnant: boolean("pregnant"),
+  advicePathway: text("advice_pathway"),
+  altContact: text("alt_contact"),
+  noContactRoute: boolean("no_contact_route"),
+  lastBpCheck: text("last_bp_check"),
+  checkedBefore: text("checked_before"),
 
   // Medical history
   knownHypertension: boolean("known_hypertension").notNull(),
@@ -103,6 +121,8 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   urgentFlag: true,
   outcome: true,
   outcomeNotes: true,
+  bmiEstimated: true,
+  advicePathway: true,
   resultOutcome: true,
   contactAttempts: true,
   outcomeUpdatedAt: true,
@@ -118,11 +138,43 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   bp2Diastolic: z.number().int().positive(),
   bp3Systolic: z.number().int().positive(),
   bp3Diastolic: z.number().int().positive(),
-  heightCm: z.number().positive(),
-  weightKg: z.number().positive(),
+  heightMethod: z.enum(MEASURE_METHODS),
+  weightMethod: z.enum(WEIGHT_METHODS),
+  heightCm: z.number().min(HEIGHT_RANGE_CM.min).max(HEIGHT_RANGE_CM.max).nullable(),
+  weightKg: z.number().min(WEIGHT_RANGE_KG.min).max(WEIGHT_RANGE_KG.max).nullable(),
+  waistCm: z.number().min(40).max(250).nullable(),
+  waistDeclined: z.boolean(),
   consentToContact: z.literal(true),
-  // New submissions must explicitly answer Yes or No; never default to No.
-  enrolledWithEmhip: z.boolean(),
+  hubLocation: z.string().trim().min(1),
+  // Only asked at the EMHIP hub; null elsewhere.
+  enrolledWithEmhip: z.boolean().nullable(),
+  symptomsReported: z.boolean(),
+  pregnant: z.boolean(),
+  lastBpCheck: z.enum(LAST_BP_CHECK_OPTIONS),
+  checkedBefore: z.enum(CHECKED_BEFORE_OPTIONS),
+  phone: z.string().trim().max(40).nullable(),
+  altContact: z.string().trim().max(200).nullable(),
+  noContactRoute: z.boolean(),
+}).superRefine((d, ctx) => {
+  if (d.registeredWithGp && !d.gpPractice?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["gpPractice"], message: "GP practice is required when registered." });
+  }
+  if (d.heightMethod === "Declined" ? d.heightCm !== null : d.heightCm === null) {
+    ctx.addIssue({ code: "custom", path: ["heightCm"], message: "Height must match its method." });
+  }
+  if (d.weightMethod === "Declined" ? d.weightKg !== null : d.weightKg === null) {
+    ctx.addIssue({ code: "custom", path: ["weightKg"], message: "Weight must match its method." });
+  }
+  if (d.waistDeclined && d.waistCm !== null) {
+    ctx.addIssue({ code: "custom", path: ["waistCm"], message: "Waist declined but a value was given." });
+  }
+  if (d.hubLocation === EMHIP_SITE ? typeof d.enrolledWithEmhip !== "boolean" : d.enrolledWithEmhip !== null) {
+    ctx.addIssue({ code: "custom", path: ["enrolledWithEmhip"], message: "EMHIP answer is required at the EMHIP hub only." });
+  }
+  const age = ageOn(d.dob);
+  if (!(age >= MIN_AGE) || age > 120) {
+    ctx.addIssue({ code: "custom", path: ["dob"], message: "Participants must be 18 or over." });
+  }
 });
 
 export type InsertScreening = z.infer<typeof insertScreeningSchema>;

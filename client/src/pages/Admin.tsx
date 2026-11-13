@@ -21,6 +21,7 @@ import {
   FOLLOW_UP_STATUSES, RESULT_OPTIONS, isOverdue, needsAction, needsReason, compareForAdmin,
   countUniquePeople, followUpDeadline,
 } from "@shared/followup";
+import { participantAdvice } from "@shared/participant-advice";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { BpBandBadge } from "@/components/BpGuidance";
 import { countEmhip, emhipLabel } from "@shared/emhip";
@@ -174,6 +175,11 @@ function RecordsPanel({ password }: { password: string }) {
   const noGp = real.filter((r: any) => r.registeredWithGp === false).length;
   const unableToContact = real.filter((r: any) => r.outcome === "Unable to contact").length;
   const confirmed = real.filter((r: any) => r.resultOutcome === "New hypertension confirmed").length;
+  const maternity = real.filter((r: any) => r.advicePathway === "Maternity").length;
+  const noContact = real.filter((r: any) => r.noContactRoute).length;
+  const longGap = real.filter((r: any) => r.lastBpCheck === "Never" || r.lastBpCheck === "More than 5 years ago").length;
+  const symptoms = real.filter((r: any) => r.symptomsReported).length;
+  const declinedMeasure = real.filter((r: any) => r.weightMethod === "Declined" || r.heightMethod === "Declined" || r.waistDeclined).length;
   const emhip = countEmhip(real);
 
   const visible = (showTests ? all : real).sort((a: any, b: any) =>
@@ -212,6 +218,18 @@ function RecordsPanel({ password }: { password: string }) {
           Counts exclude test records. Current programme bands ({BP_PROTOCOL_VERSION}) are calculated from the recorded BP averages;
           historical readings and saved categories are unchanged. CSV includes both the recorded category and current programme band.
         </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium">Reach and safety</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <StatCard label="BP never checked or 5+ years ago" value={longGap} testId="stat-longgap" />
+          <StatCard label="Maternity redirects" value={maternity} testId="stat-maternity" />
+          <StatCard label="No contact route" value={noContact} testId="stat-nocontact" />
+          <StatCard label="999 symptoms reported" value={symptoms} testId="stat-symptoms" tone="destructive" />
+          <StatCard label="Height, weight or waist declined" value={declinedMeasure} testId="stat-declined" />
+        </div>
+        <p className="text-xs text-muted-foreground">These questions were added on 13 November 2026; earlier records are not counted.</p>
       </section>
 
       <section aria-labelledby="emhip-summary-title" className="space-y-2">
@@ -255,7 +273,7 @@ function RecordsPanel({ password }: { password: string }) {
           </TableHeader>
           <TableBody>
             {visible.map((r: any) => {
-              const current = classifyBp(r.avgSystolic, r.avgDiastolic);
+              const current = { category: r.band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute }).advice };
               const late = !r.isTest && isOverdue(r.band, r.outcome, r.createdAt, now);
               const deadline = followUpDeadline(r.band, r.createdAt);
               return (
@@ -267,6 +285,9 @@ function RecordsPanel({ password }: { password: string }) {
                   <TableCell className="font-medium">
                     <div>{r.patientName}</div>
                     {r.isTest && <Badge variant="outline" className="mt-1">Test record</Badge>}
+                    {r.symptomsReported && <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700">999 symptoms</Badge>}
+                    {r.pregnant && <Badge variant="outline" className="mt-1">Pregnant</Badge>}
+                    {r.noContactRoute && <Badge variant="outline" className="mt-1">No contact route</Badge>}
                     {late && (
                       <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700" data-testid={`badge-overdue-${r.id}`}>
                         Overdue
@@ -284,8 +305,10 @@ function RecordsPanel({ password }: { password: string }) {
                   <TableCell className="text-xs">
                     {r.registeredWithGp ? (r.gpPractice || "Registered") : <span className="font-medium">Not registered</span>}
                   </TableCell>
-                  <TableCell data-testid={`emhip-screening-${r.id}`}>{emhipLabel(r.enrolledWithEmhip)}</TableCell>
-                  <TableCell className="tabular-nums">{r.bmi}</TableCell>
+                  <TableCell data-testid={`emhip-screening-${r.id}`}>{r.enrolledWithEmhip == null && r.lastBpCheck ? "Not asked (other site)" : emhipLabel(r.enrolledWithEmhip)}</TableCell>
+                  <TableCell className="tabular-nums whitespace-nowrap">
+                    {r.bmi ?? "—"}{r.bmi != null && r.bmiEstimated ? <span className="text-xs text-muted-foreground"> est.</span> : null}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{r.volunteerName}</TableCell>
                   <TableCell className="text-muted-foreground whitespace-nowrap">{fmtDate(r.screeningDate)}</TableCell>
                   <TableCell className="min-w-52 text-xs space-y-1">
@@ -370,7 +393,7 @@ function FollowUpDialog({ record, password, onClose, onSaved }: { record: any; p
           <DialogTitle>Follow-up: {record.patientName}</DialogTitle>
           <DialogDescription>
             {record.band} · {record.avgSystolic}/{record.avgDiastolic} mmHg · screened {fmtDate(record.screeningDate)}
-            {record.phone ? ` · ${record.phone}` : " · no phone recorded"}
+            {record.phone ? ` · ${record.phone}` : record.altContact ? ` · contact: ${record.altContact}` : record.noContactRoute ? " · no contact route given" : " · no phone recorded"}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

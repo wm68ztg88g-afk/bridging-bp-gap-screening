@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema, setTestSchema } from "@shared/schema";
 import { needsReason, NOT_REVIEWED, isOverdue } from "@shared/followup";
 import { sendBandAlert } from "./alerts";
+import { participantAdvice, needsContactRoute } from "@shared/participant-advice";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { emhipLabel } from "@shared/emhip";
 
@@ -83,8 +84,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const avgSystolic = Math.round((data.bp2Systolic + data.bp3Systolic) / 2);
     const avgDiastolic = Math.round((data.bp2Diastolic + data.bp3Diastolic) / 2);
-    const bmi = computeBmi(data.heightCm, data.weightKg);
+    const bmi = data.heightCm !== null && data.weightKg !== null ? computeBmi(data.heightCm, data.weightKg) : null;
+    const bmiEstimated = bmi !== null && (data.heightMethod !== "Measured" || data.weightMethod !== "Measured");
     const { category, urgent } = classifyBp(avgSystolic, avgDiastolic);
+    const advice = participantAdvice({
+      systolic: avgSystolic, diastolic: avgDiastolic, pregnant: data.pregnant, noContactRoute: data.noContactRoute,
+    });
+
+    // Amber/red outside pregnancy: the SGH team must be able to reach them,
+    // or the volunteer must have recorded that no contact route was given.
+    if (needsContactRoute(category, data.pregnant) && !data.phone && !data.altContact && !data.noContactRoute) {
+      return res.status(422).json({ message: "Add a phone number or other contact, or record that the participant gave none." });
+    }
 
     const { volunteerCode, ...rest } = data;
 
@@ -95,6 +106,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       avgSystolic,
       avgDiastolic,
       bmi,
+      bmiEstimated,
+      advicePathway: advice.pathway,
       bpCategory: category,
       urgentFlag: urgent,
       outcome: "Not yet reviewed",
@@ -139,6 +152,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "currentProgrammeBand", "currentProgrammeAdvice", "currentProgrammeVersion",
       "enrolledWithEmhip",
       "resultOutcome", "contactAttempts", "firstActionAt", "outcomeUpdatedAt", "overdue", "isTest",
+      "heightMethod", "weightMethod", "waistDeclined", "bmiEstimated",
+      "symptomsReported", "pregnant", "advicePathway", "altContact", "noContactRoute",
+      "lastBpCheck", "checkedBefore",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);
@@ -149,7 +165,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     };
     const lines = [headers.join(",")];
     for (const r of rows) {
-      const current = classifyBp(r.avgSystolic, r.avgDiastolic);
+      const band = classifyBp(r.avgSystolic, r.avgDiastolic);
+      const current = { ...band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute }).advice };
       const exportRow = {
         ...r,
         enrolledWithEmhip: emhipLabel(r.enrolledWithEmhip),
