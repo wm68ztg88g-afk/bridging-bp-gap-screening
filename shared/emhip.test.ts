@@ -5,7 +5,7 @@ import { countEmhip, emhipLabel } from "./emhip";
 
 const base = {
   volunteerCode: "X", screeningDate: "2026-11-13", patientName: "Test", dob: "1970-01-01", sex: "Female",
-  ethnicity: "Prefer not to say", postcode: "SW17", phone: "07700900000", altContact: null, noContactRoute: false,
+  ethnicity: "Prefer not to say", postcode: "SW17", phone: "07700900000", email: null, altContact: null, contactViaGp: false, noContactRoute: false,
   interpreterNeeded: false, registeredWithGp: false, gpPractice: null,
   bp1Systolic: 120, bp1Diastolic: 80, bp2Systolic: 120, bp2Diastolic: 80, bp3Systolic: 120, bp3Diastolic: 80,
   heightMethod: "Declined", weightMethod: "Declined", heightCm: null, weightKg: null, waistCm: null, waistDeclined: true,

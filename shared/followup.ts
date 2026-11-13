@@ -63,12 +63,13 @@ const BAND_RANK: Record<BpBand, number> = { Red: 0, Amber: 1, Yellow: 2, Green: 
 
 /** Sort key: overdue first, then items needing action, then band severity, then newest. */
 export function compareForAdmin(
-  a: { band: BpBand; status: string; createdAt: string },
-  b: { band: BpBand; status: string; createdAt: string },
+  a: { band: BpBand; status: string; createdAt: string; flagged?: boolean },
+  b: { band: BpBand; status: string; createdAt: string; flagged?: boolean },
   now: Date = new Date(),
 ): number {
+  // Flagged (e.g. red with no contact details) and overdue come first.
   const rank = (r: typeof a) =>
-    isOverdue(r.band, r.status, r.createdAt, now) ? 0 : needsAction(r.band, r.status) ? 1 : 2;
+    r.flagged && r.status === NOT_REVIEWED ? 0 : isOverdue(r.band, r.status, r.createdAt, now) ? 0 : needsAction(r.band, r.status) ? 1 : 2;
   return (
     rank(a) - rank(b) ||
     BAND_RANK[a.band] - BAND_RANK[b.band] ||

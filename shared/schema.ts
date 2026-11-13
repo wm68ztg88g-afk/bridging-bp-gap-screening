@@ -4,7 +4,7 @@ import { z } from "zod";
 import { FOLLOW_UP_STATUSES, RESULT_OPTIONS } from "./followup";
 import {
   MEASURE_METHODS, WEIGHT_METHODS, LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS,
-  HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, MIN_AGE, ageOn, EMHIP_SITE,
+  HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, MIN_AGE, ageOn, EMHIP_SITE, EMAIL_PATTERN,
 } from "./participant-advice";
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,9 @@ export const screenings = pgTable("screenings", {
   symptomsReported: boolean("symptoms_reported"),
   pregnant: boolean("pregnant"),
   advicePathway: text("advice_pathway"),
+  email: text("email"),
   altContact: text("alt_contact"),
+  contactViaGp: boolean("contact_via_gp"),
   noContactRoute: boolean("no_contact_route"),
   lastBpCheck: text("last_bp_check"),
   checkedBefore: text("checked_before"),
@@ -153,7 +155,9 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   lastBpCheck: z.enum(LAST_BP_CHECK_OPTIONS),
   checkedBefore: z.enum(CHECKED_BEFORE_OPTIONS),
   phone: z.string().trim().max(40).nullable(),
+  email: z.string().trim().max(200).regex(EMAIL_PATTERN).nullable(),
   altContact: z.string().trim().max(200).nullable(),
+  contactViaGp: z.boolean(),
   noContactRoute: z.boolean(),
 }).superRefine((d, ctx) => {
   if (d.registeredWithGp && !d.gpPractice?.trim()) {
@@ -170,6 +174,9 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   }
   if (d.hubLocation === EMHIP_SITE ? typeof d.enrolledWithEmhip !== "boolean" : d.enrolledWithEmhip !== null) {
     ctx.addIssue({ code: "custom", path: ["enrolledWithEmhip"], message: "EMHIP answer is required at the EMHIP hub only." });
+  }
+  if (d.contactViaGp && !(d.registeredWithGp && d.consentGpContact)) {
+    ctx.addIssue({ code: "custom", path: ["contactViaGp"], message: "Contact via GP needs GP registration and consent." });
   }
   const age = ageOn(d.dob);
   if (!(age >= MIN_AGE) || age > 120) {

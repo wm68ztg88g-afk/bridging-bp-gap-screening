@@ -17,7 +17,7 @@ import {
 import { BpGuidance, EmergencyAdvice } from "@/components/BpGuidance";
 import {
   ageOn, MIN_AGE, ftInToCm, stLbToKg, HEIGHT_RANGE_CM, WEIGHT_RANGE_KG, needsContactRoute,
-  LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS, SITE_OPTIONS, EMHIP_SITE, participantAdvice, contactMandatory,
+  LAST_BP_CHECK_OPTIONS, CHECKED_BEFORE_OPTIONS, SITE_OPTIONS, EMHIP_SITE, participantAdvice, EMAIL_PATTERN,
 } from "@shared/participant-advice";
 import { classifyBp } from "@shared/bp-protocol";
 import { useStore } from "@/lib/store";
@@ -66,7 +66,9 @@ interface FormState {
   lastBpCheck: string;
   checkedBefore: string;
   pregnant: "yes" | "no" | "";
+  email: string;
   altContact: string;
+  contactViaGp: boolean;
   noContactRoute: boolean;
   heightMethod: string;
   heightUnit: "cm" | "ftin";
@@ -117,7 +119,9 @@ const EMPTY: FormState = {
   lastBpCheck: "",
   checkedBefore: "",
   pregnant: "",
+  email: "",
   altContact: "",
+  contactViaGp: false,
   noContactRoute: false,
   heightMethod: "",
   heightUnit: "cm",
@@ -219,8 +223,12 @@ export default function NewScreening() {
   const bmiEstimated = bmi !== null && (form.heightMethod !== "Measured" || form.weightMethod !== "Measured");
 
   const contactNeeded = avg !== null && needsContactRoute(avg.category, isPregnant);
-  const hasContact = !!form.phone.trim() || !!form.altContact.trim();
-  const contactRequired = avg !== null && contactMandatory(avg.category, isPregnant);
+  const hasContact = !!form.phone.trim() || !!form.email.trim() || !!form.altContact.trim();
+  const gpRoutePossible = form.registeredWithGp === "yes";
+  // What the participant is told about follow-up (amber with no direct contact).
+  const viaGp = contactNeeded && !hasContact && gpRoutePossible && avg?.category === "Amber" && form.contactViaGp;
+  const noRoute = contactNeeded && !hasContact && !viaGp && form.noContactRoute;
+  const isRed = avg !== null && avg.category === "Red";
 
   function validateStep(i: number): string | null {
     if (i === 0) {
@@ -258,10 +266,11 @@ export default function NewScreening() {
       if (nums.some((n) => !n.trim())) return "Enter all three blood pressure readings.";
       if (nums.some((n) => !Number.isInteger(Number(n)) || Number(n) <= 0))
         return "Blood pressure readings must be positive whole numbers.";
-      if (contactRequired && !hasContact)
-        return "Red result: the SGH team must be able to contact them. Add a phone number or another way to reach them (e.g. via their GP or the venue).";
-      if (contactNeeded && !hasContact && !form.noContactRoute)
-        return "Add a phone number or other way to contact them, or tick that they gave none.";
+      if (form.email.trim() && !EMAIL_PATTERN.test(form.email.trim())) return "Check the email address.";
+      if (contactNeeded && !hasContact && !viaGp && !form.noContactRoute)
+        return gpRoutePossible && !isRed
+          ? "Add a phone number or email, or record that the team may contact their GP practice instead."
+          : "Add a phone number or email, or tick that they gave no contact details.";
       if (!form.heightMethod) return "Choose how height was obtained (or Declined).";
       if (form.heightMethod !== "Declined") {
         if (heightCm === null) return "Enter the height.";
@@ -342,8 +351,10 @@ export default function NewScreening() {
         ethnicity: form.ethnicity,
         postcode: form.postcode.trim().toUpperCase(),
         phone: form.phone.trim() || null,
+        email: form.email.trim() || null,
         altContact: form.altContact.trim() || null,
-        noContactRoute: contactNeeded && !contactRequired && !hasContact ? form.noContactRoute : false,
+        contactViaGp: viaGp,
+        noContactRoute: noRoute,
         symptomsReported: form.symptomsNow === "yes",
         pregnant: isPregnant,
         lastBpCheck: form.lastBpCheck,
@@ -373,7 +384,7 @@ export default function NewScreening() {
         familyHistoryHtn: form.familyHistoryHtn,
         notes: form.notes.trim() || null,
         consentToContact: form.consentToContact,
-        consentGpContact: form.registeredWithGp === "yes" ? form.consentGpContact : null,
+        consentGpContact: form.registeredWithGp === "yes" ? (form.consentGpContact || viaGp) : null,
       });
       setSuccess(true);
     } catch (e: any) {
@@ -403,7 +414,7 @@ export default function NewScreening() {
                 {form.patientName}'s record has been added.
               </p>
             </div>
-            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant} noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
+            {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant} noContactRoute={noRoute} contactViaGp={viaGp} registeredWithGp={form.registeredWithGp === "yes"} />}
             <EmergencyAdvice />
             <div className="flex flex-col gap-2 pt-2">
               <Button
@@ -592,6 +603,11 @@ export default function NewScreening() {
                   onChange={(e) => set("phone", e.target.value)} />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email (optional)</Label>
+              <Input id="email" data-testid="input-email" type="email" inputMode="email" value={form.email}
+                onChange={(e) => set("email", e.target.value)} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="language">Preferred language</Label>
@@ -718,13 +734,13 @@ export default function NewScreening() {
             </Card>
 
             {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
-              noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
+              noContactRoute={noRoute} contactViaGp={viaGp} registeredWithGp={form.registeredWithGp === "yes"} />}
 
-            {contactNeeded && !form.phone.trim() && (
+            {contactNeeded && !form.phone.trim() && !form.email.trim() && (
               <Card className="border-orange-600">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">How can the SGH team contact them? *</CardTitle>
-                  <CardDescription>No phone number was given. The team needs a way to reach them about this reading.</CardDescription>
+                  <CardDescription>No phone number or email was given. The team needs a way to follow up this reading.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="space-y-2">
@@ -733,21 +749,39 @@ export default function NewScreening() {
                       onChange={(e) => set("phone", e.target.value)} />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="email2">Email</Label>
+                    <Input id="email2" type="email" inputMode="email" data-testid="input-email-followup" value={form.email}
+                      onChange={(e) => set("email", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="alt">Or another way to reach them</Label>
                     <Input id="alt" data-testid="input-alt-contact" placeholder="e.g. email, via their GP, or via the venue"
                       value={form.altContact} onChange={(e) => set("altContact", e.target.value)} />
                   </div>
-                  {contactRequired && (
-                    <p className="text-sm font-medium text-red-800 dark:text-red-300" data-testid="text-red-contact-required">
-                      Red result: a contact route is required. The SGH team will contact them within 24–48 hours.
+                  {isRed && (
+                    <p className="text-sm font-medium text-red-800 dark:text-red-300" data-testid="text-red-contact">
+                      Red result: please try hard to get a phone number or email so the SGH team can arrange an urgent appointment.
                     </p>
                   )}
-                  {!hasContact && !contactRequired && (
+                  {!hasContact && !isRed && gpRoutePossible && (
+                    <div className="flex items-start gap-2 rounded-md border border-border p-3">
+                      <Checkbox id="viagp" checked={form.contactViaGp}
+                        onCheckedChange={(c) => { set("contactViaGp", !!c); if (c) set("noContactRoute", false); }} data-testid="checkbox-contact-via-gp" />
+                      <Label htmlFor="viagp" className="font-normal text-sm leading-relaxed">
+                        They agree that the SGH team may contact their GP practice ({form.gpPractice || "practice named earlier"}) about this reading instead.
+                      </Label>
+                    </div>
+                  )}
+                  {!hasContact && !viaGp && (
                     <div className="flex items-start gap-2 rounded-md border border-border p-3">
                       <Checkbox id="nocontact" checked={form.noContactRoute}
                         onCheckedChange={(c) => set("noContactRoute", !!c)} data-testid="checkbox-no-contact" />
                       <Label htmlFor="nocontact" className="font-normal text-sm leading-relaxed">
-                        They do not want to give any contact details. They will be told to arrange follow-up themselves.
+                        {isRed
+                          ? "They will not give any contact details. They will be told to go straight to A&E at St George’s, and this will be flagged to the clinical lead."
+                          : gpRoutePossible
+                            ? "They do not agree to any contact, including via their GP. They will be told to arrange follow-up themselves."
+                            : "They do not want to give any contact details. They will be told to book a GP appointment themselves."}
                       </Label>
                     </div>
                   )}
@@ -906,7 +940,7 @@ export default function NewScreening() {
         {step === 4 && (
           <div className="space-y-5">
             {avg && <BpGuidance systolic={avg.avgSys} diastolic={avg.avgDia} pregnant={isPregnant}
-              noContactRoute={contactNeeded && !contactRequired && !hasContact && form.noContactRoute} />}
+              noContactRoute={noRoute} contactViaGp={viaGp} registeredWithGp={form.registeredWithGp === "yes"} />}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Review</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -917,7 +951,7 @@ export default function NewScreening() {
                 <ReviewRow label="Postcode" value={form.postcode} />
                 <ReviewRow label="GP" value={form.registeredWithGp === "yes" ? form.gpPractice : "Not registered"} />
                 {atEmhip && <ReviewRow label="Enrolled with EMHIP" value={form.enrolledWithEmhip === "yes" ? "Yes" : "No"} />}
-                <ReviewRow label="Contact" value={form.phone.trim() || form.altContact.trim() || (form.noContactRoute ? "None given" : "—")} />
+                <ReviewRow label="Contact" value={[form.phone.trim(), form.email.trim(), form.altContact.trim()].filter(Boolean).join(" · ") || (viaGp ? "Via GP practice" : noRoute ? "None given" : "—")} />
                 <ReviewRow label="Last BP check" value={form.lastBpCheck || "—"} />
                 <ReviewRow label="Checked by programme before" value={form.checkedBefore || "—"} />
                 {showPregnancy && <ReviewRow label="Pregnant" value={isPregnant ? "Yes" : "No"} />}

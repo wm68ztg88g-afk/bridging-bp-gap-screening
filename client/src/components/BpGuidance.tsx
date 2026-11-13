@@ -33,10 +33,10 @@ export function EmergencyAdvice() {
   );
 }
 
-export function BpGuidance({ systolic, diastolic, pregnant, noContactRoute }: {
-  systolic: number; diastolic: number; pregnant?: boolean; noContactRoute?: boolean;
+export function BpGuidance({ systolic, diastolic, pregnant, noContactRoute, contactViaGp, registeredWithGp }: {
+  systolic: number; diastolic: number; pregnant?: boolean; noContactRoute?: boolean; contactViaGp?: boolean; registeredWithGp?: boolean;
 }) {
-  const advice = participantAdvice({ systolic, diastolic, pregnant, noContactRoute });
+  const advice = participantAdvice({ systolic, diastolic, pregnant, noContactRoute, contactViaGp, registeredWithGp });
   const result = { category: advice.band };
   return (
     <section className={`rounded-md border border-l-[6px] p-3 space-y-2 text-left ${BP_BAND_STYLES[result.category]}`}
@@ -57,7 +57,7 @@ export function BpGuidance({ systolic, diastolic, pregnant, noContactRoute }: {
           )}</p>
         ))}
       </div>
-      {(result.category === "Amber" || result.category === "Red") && advice.pathway === "Standard" && (
+      {(result.category === "Amber" || result.category === "Red") && (advice.pathway === "Standard" || advice.pathway === "GpContact") && (
         <p className="text-xs" data-testid="sgh-definition">SGH = St George’s Hospital.</p>
       )}
       <p className="text-xs">A screening check is not a diagnosis.</p>

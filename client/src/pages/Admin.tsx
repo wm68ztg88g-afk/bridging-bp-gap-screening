@@ -21,7 +21,7 @@ import {
   FOLLOW_UP_STATUSES, RESULT_OPTIONS, isOverdue, needsAction, needsReason, compareForAdmin,
   countUniquePeople, followUpDeadline,
 } from "@shared/followup";
-import { participantAdvice } from "@shared/participant-advice";
+import { participantAdvice, isRedNoContact, isNoContactFlag } from "@shared/participant-advice";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { BpBandBadge } from "@/components/BpGuidance";
 import { countEmhip, emhipLabel } from "@shared/emhip";
@@ -177,17 +177,35 @@ function RecordsPanel({ password }: { password: string }) {
   const confirmed = real.filter((r: any) => r.resultOutcome === "New hypertension confirmed").length;
   const maternity = real.filter((r: any) => r.advicePathway === "Maternity").length;
   const noContact = real.filter((r: any) => r.noContactRoute).length;
+  const noContactFlags = real.filter((r: any) => isNoContactFlag(r.band, r.noContactRoute, r.pregnant) && r.outcome === "Not yet reviewed");
+  const redNoContact = noContactFlags.filter((r: any) => r.band === "Red");
+  const amberNoContact = noContactFlags.filter((r: any) => r.band === "Amber");
   const longGap = real.filter((r: any) => r.lastBpCheck === "Never" || r.lastBpCheck === "More than 5 years ago").length;
   const symptoms = real.filter((r: any) => r.symptomsReported).length;
   const declinedMeasure = real.filter((r: any) => r.weightMethod === "Declined" || r.heightMethod === "Declined" || r.waistDeclined).length;
   const emhip = countEmhip(real);
 
   const visible = (showTests ? all : real).sort((a: any, b: any) =>
-    compareForAdmin({ band: a.band, status: a.outcome, createdAt: a.createdAt }, { band: b.band, status: b.outcome, createdAt: b.createdAt }, now),
+    compareForAdmin(
+      { band: a.band, status: a.outcome, createdAt: a.createdAt, flagged: isNoContactFlag(a.band, a.noContactRoute, a.pregnant) },
+      { band: b.band, status: b.outcome, createdAt: b.createdAt, flagged: isNoContactFlag(b.band, b.noContactRoute, b.pregnant) },
+      now,
+    ),
   );
 
   return (
     <div className="space-y-5">
+      {noContactFlags.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border-2 border-red-700 bg-red-50 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100" data-testid="banner-red-nocontact">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <p>
+            <strong>No contact details given:</strong>{" "}
+            {redNoContact.length > 0 && <>{redNoContact.length} red (told to go straight to St George’s A&E — check attendance){amberNoContact.length > 0 ? "; " : ". "}</>}
+            {amberNoContact.length > 0 && <>{amberNoContact.length} amber (told to see their GP within 4 weeks). </>}
+            Listed first below.
+          </p>
+        </div>
+      )}
       {overdue > 0 && (
         <div className="flex items-start gap-2 rounded-md border border-red-600/50 bg-red-50 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100" data-testid="banner-overdue">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -273,21 +291,27 @@ function RecordsPanel({ password }: { password: string }) {
           </TableHeader>
           <TableBody>
             {visible.map((r: any) => {
-              const current = { category: r.band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute }).advice };
+              const current = { category: r.band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute, contactViaGp: r.contactViaGp, registeredWithGp: r.registeredWithGp }).advice };
               const late = !r.isTest && isOverdue(r.band, r.outcome, r.createdAt, now);
+              const flagged = !r.isTest && isNoContactFlag(r.band, r.noContactRoute, r.pregnant) && r.outcome === "Not yet reviewed";
               const deadline = followUpDeadline(r.band, r.createdAt);
               return (
                 <TableRow
                   key={r.id}
                   data-testid={`row-screening-${r.id}`}
-                  className={r.isTest ? "opacity-60" : late ? "bg-red-50 dark:bg-red-950/40" : undefined}
+                  className={r.isTest ? "opacity-60" : late || flagged ? "bg-red-50 dark:bg-red-950/40" : undefined}
                 >
                   <TableCell className="font-medium">
                     <div>{r.patientName}</div>
                     {r.isTest && <Badge variant="outline" className="mt-1">Test record</Badge>}
                     {r.symptomsReported && <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700">999 symptoms</Badge>}
                     {r.pregnant && <Badge variant="outline" className="mt-1">Pregnant</Badge>}
-                    {r.noContactRoute && <Badge variant="outline" className="mt-1">No contact route</Badge>}
+                    {isRedNoContact(r.band, r.noContactRoute, r.pregnant)
+                      ? <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700" data-testid={`badge-red-nocontact-${r.id}`}>No contact details — sent to A&E</Badge>
+                      : isNoContactFlag(r.band, r.noContactRoute, r.pregnant)
+                        ? <Badge className="mt-1 bg-orange-500 text-orange-950 hover:bg-orange-500" data-testid={`badge-amber-nocontact-${r.id}`}>No contact details — told to see GP</Badge>
+                        : r.noContactRoute && <Badge variant="outline" className="mt-1">No contact route</Badge>}
+                    {r.contactViaGp && <Badge variant="outline" className="mt-1">Contact via GP</Badge>}
                     {late && (
                       <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700" data-testid={`badge-overdue-${r.id}`}>
                         Overdue
@@ -393,7 +417,9 @@ function FollowUpDialog({ record, password, onClose, onSaved }: { record: any; p
           <DialogTitle>Follow-up: {record.patientName}</DialogTitle>
           <DialogDescription>
             {record.band} · {record.avgSystolic}/{record.avgDiastolic} mmHg · screened {fmtDate(record.screeningDate)}
-            {record.phone ? ` · ${record.phone}` : record.altContact ? ` · contact: ${record.altContact}` : record.noContactRoute ? " · no contact route given" : " · no phone recorded"}
+            {[record.phone, record.email, record.altContact].filter(Boolean).length
+              ? ` · ${[record.phone, record.email, record.altContact].filter(Boolean).join(" · ")}`
+              : record.contactViaGp ? ` · contact via GP: ${record.gpPractice}` : record.noContactRoute ? " · no contact route given" : " · no contact recorded"}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

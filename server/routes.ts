@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema, setTestSchema } from "@shared/schema";
 import { needsReason, NOT_REVIEWED, isOverdue } from "@shared/followup";
 import { sendBandAlert } from "./alerts";
-import { participantAdvice, needsContactRoute, contactMandatory } from "@shared/participant-advice";
+import { participantAdvice, needsContactRoute, isRedNoContact, isNoContactFlag } from "@shared/participant-advice";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { emhipLabel } from "@shared/emhip";
 
@@ -89,16 +89,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const { category, urgent } = classifyBp(avgSystolic, avgDiastolic);
     const advice = participantAdvice({
       systolic: avgSystolic, diastolic: avgDiastolic, pregnant: data.pregnant, noContactRoute: data.noContactRoute,
+      contactViaGp: data.contactViaGp, registeredWithGp: data.registeredWithGp,
     });
 
     // Amber/red outside pregnancy: the SGH team must be able to reach them,
     // or the volunteer must have recorded that no contact route was given.
-    const hasContact = !!data.phone || !!data.altContact;
-    if (contactMandatory(category, data.pregnant) && !hasContact) {
-      return res.status(422).json({ message: "A red result needs a phone number or other way for the SGH team to contact them." });
-    }
-    if (needsContactRoute(category, data.pregnant) && !hasContact && !data.noContactRoute) {
-      return res.status(422).json({ message: "Add a phone number or other contact, or record that the participant gave none." });
+    const hasContact = !!data.phone || !!data.email || !!data.altContact;
+    if (needsContactRoute(category, data.pregnant) && !hasContact && !data.noContactRoute && !data.contactViaGp) {
+      return res.status(422).json({ message: "Add a phone number, email or other contact, or record how follow-up will happen." });
     }
 
     const { volunteerCode, ...rest } = data;
@@ -121,7 +119,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.status(201).json(record);
 
     // Fire-and-forget: alert the clinical lead for amber/red. No patient details.
-    void sendBandAlert(category, record.hubLocation, new Date(record.createdAt));
+    void sendBandAlert(category, record.hubLocation, new Date(record.createdAt), {
+      noContact: !!data.noContactRoute, pregnant: data.pregnant,
+    });
   });
 
   // -------------------------------------------------------------------
@@ -157,8 +157,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "enrolledWithEmhip",
       "resultOutcome", "contactAttempts", "firstActionAt", "outcomeUpdatedAt", "overdue", "isTest",
       "heightMethod", "weightMethod", "waistDeclined", "bmiEstimated",
-      "symptomsReported", "pregnant", "advicePathway", "altContact", "noContactRoute",
-      "lastBpCheck", "checkedBefore",
+      "symptomsReported", "pregnant", "advicePathway", "email", "altContact", "contactViaGp", "noContactRoute",
+      "lastBpCheck", "checkedBefore", "noContactFlag",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);
@@ -170,7 +170,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const lines = [headers.join(",")];
     for (const r of rows) {
       const band = classifyBp(r.avgSystolic, r.avgDiastolic);
-      const current = { ...band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute }).advice };
+      const current = { ...band, advice: participantAdvice({ systolic: r.avgSystolic, diastolic: r.avgDiastolic, pregnant: r.pregnant, noContactRoute: r.noContactRoute, contactViaGp: r.contactViaGp, registeredWithGp: r.registeredWithGp }).advice };
       const exportRow = {
         ...r,
         enrolledWithEmhip: emhipLabel(r.enrolledWithEmhip),
@@ -179,6 +179,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         currentProgrammeVersion: BP_PROTOCOL_VERSION,
         overdue: isOverdue(current.category, r.outcome, r.createdAt) ? "Yes" : "No",
         isTest: r.isTest ? "Yes" : "No",
+        noContactFlag: isRedNoContact(band.category, r.noContactRoute, r.pregnant)
+          ? "RED - NO CONTACT DETAILS - told to attend SGH A&E"
+          : isNoContactFlag(band.category, r.noContactRoute, r.pregnant) ? "AMBER - NO CONTACT DETAILS - told to see GP" : "",
       };
       lines.push(headers.map((h) => escape((exportRow as any)[h])).join(","));
     }

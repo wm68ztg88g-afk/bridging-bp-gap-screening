@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   participantAdvice, needsContactRoute, ageOn, ftInToCm, stLbToKg, isAbovePregnancyThreshold,
-  MATERNITY_ADVICE, PREGNANT_IN_RANGE_ADVICE, contactMandatory,
+  MATERNITY_ADVICE, PREGNANT_IN_RANGE_ADVICE, isRedNoContact, isNoContactFlag, NO_CONTACT_ADVICE, GP_CONTACT_ADVICE, NOT_REGISTERED_ADVICE,
 } from "./participant-advice";
 import { BP_ADVICE_PARAGRAPHS } from "./bp-protocol";
 
@@ -27,14 +27,15 @@ test("pregnant at or below 135/85 gets in-range advice", () => {
   assert.equal(r.band, "Green");
 });
 
-test("no contact route changes amber advice only; red keeps the card wording", () => {
+test("no contact route: amber books GP, red goes to SGH A&E; yellow unchanged", () => {
   assert.equal(participantAdvice({ systolic: 160, diastolic: 80, noContactRoute: true }).pathway, "NoContactRoute");
   const red = participantAdvice({ systolic: 185, diastolic: 80, noContactRoute: true });
-  assert.equal(red.pathway, "Standard");
-  assert.deepEqual(red.paragraphs, BP_ADVICE_PARAGRAPHS.Red);
-  assert.equal(contactMandatory("Red"), true);
-  assert.equal(contactMandatory("Amber"), false);
-  assert.equal(contactMandatory("Red", true), false);
+  assert.equal(red.pathway, "NoContactRoute");
+  assert.deepEqual(red.paragraphs, NO_CONTACT_ADVICE.Red);
+  assert.match(red.advice, /A&E at St George/);
+  assert.equal(isRedNoContact("Red", true), true);
+  assert.equal(isRedNoContact("Amber", true), false);
+  assert.equal(isRedNoContact("Red", true, true), false);
   const y = participantAdvice({ systolic: 140, diastolic: 80, noContactRoute: true });
   assert.equal(y.pathway, "Standard");
   assert.deepEqual(y.paragraphs, BP_ADVICE_PARAGRAPHS.Yellow);
@@ -61,4 +62,25 @@ test("age calculation handles birthdays", () => {
 test("unit conversions", () => {
   assert.equal(ftInToCm(5, 6), 167.6);
   assert.equal(stLbToKg(11, 0), 69.9);
+});
+
+test("amber with no direct contact routes via the GP when agreed", () => {
+  const r = participantAdvice({ systolic: 160, diastolic: 80, contactViaGp: true });
+  assert.equal(r.pathway, "GpContact");
+  assert.deepEqual(r.paragraphs, GP_CONTACT_ADVICE);
+  // GP route never applies to red
+  assert.equal(participantAdvice({ systolic: 185, diastolic: 80, contactViaGp: true }).pathway, "Standard");
+});
+
+test("amber with no contact and no GP is told how to register", () => {
+  const r = participantAdvice({ systolic: 160, diastolic: 80, noContactRoute: true, registeredWithGp: false });
+  assert.equal(r.paragraphs.at(-1), NOT_REGISTERED_ADVICE);
+});
+
+test("amber and red without contact details are both flagged", () => {
+  assert.equal(isNoContactFlag("Amber", true), true);
+  assert.equal(isNoContactFlag("Red", true), true);
+  assert.equal(isNoContactFlag("Yellow", true), false);
+  assert.equal(isNoContactFlag("Amber", false), false);
+  assert.equal(isNoContactFlag("Amber", true, true), false);
 });

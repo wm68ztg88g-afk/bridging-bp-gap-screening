@@ -3,13 +3,14 @@
 //
 // Clinical lead decisions, 13 November 2026:
 // - Pregnant and BP above 135/85 (either reading): redirect to maternity services.
-// - Amber participant gives no way to be contacted: advice tells them to book
-//   their GP themselves. Red always needs a contact route; card wording unchanged.
+// - Amber with no phone/email: SGH team contacts the GP practice (if registered
+//   and agreed); otherwise they are told to book their GP themselves.
+// - Red with no contact details: told to go straight to SGH A&E; flagged in admin.
 // Wording marked PENDING CONFIRMATION awaits clinical-lead sign-off.
 
 import { classifyBp, BP_ADVICE_PARAGRAPHS, type BpBand } from "./bp-protocol";
 
-export type AdvicePathway = "Standard" | "Maternity" | "PregnantInRange" | "NoContactRoute";
+export type AdvicePathway = "Standard" | "Maternity" | "PregnantInRange" | "GpContact" | "NoContactRoute";
 
 export const PREGNANCY_THRESHOLD = { systolic: 135, diastolic: 85 } as const;
 
@@ -23,14 +24,28 @@ export const PREGNANT_IN_RANGE_ADVICE = [
   "Tell your midwife about this reading at your next appointment.",
 ];
 export const NO_CONTACT_ADVICE: Partial<Record<BpBand, string[]>> = {
-  // Red is never offered "no contact route": the SGH team always contacts red
-  // participants, so a phone number or other contact is mandatory (clinical lead, 13 Nov 2026).
   Amber: ["We won’t be able to contact you, so please book a GP appointment within 4 weeks."],
+  // Clinical lead, 13 Nov 2026: red with no contact details goes straight to SGH A&E,
+  // and the record is flagged to the clinical lead.
+  Red: ["We won’t be able to contact you, so please go straight to A&E at St George’s Hospital (Blackshaw Road, Tooting)."],
 };
+export const NOT_REGISTERED_ADVICE = "If you are not registered with a GP, you can register with any GP practice near you.";
 
-/** Red results must always have a contact route; "none given" is not allowed. */
-export function contactMandatory(band: BpBand, pregnant?: boolean | null): boolean {
-  return !pregnant && band === "Red";
+// Amber with no phone/email: the clinical lead's default is to contact the GP
+// practice instead (needs GP registration and the participant's agreement).
+export const GP_CONTACT_ADVICE = [
+  "The SGH project team will contact your GP practice about this reading within 4 weeks.",
+  "Also make an appointment to see your GP within 4 weeks.",
+];
+
+/** Amber or red with no contact details: flagged to the clinical lead on the admin list. */
+export function isNoContactFlag(band: BpBand, noContactRoute?: boolean | null, pregnant?: boolean | null): boolean {
+  return (band === "Red" || band === "Amber") && !!noContactRoute && !pregnant;
+}
+
+/** Red with no contact details: told to attend SGH A&E and flagged to the clinical lead. */
+export function isRedNoContact(band: BpBand, noContactRoute?: boolean | null, pregnant?: boolean | null): boolean {
+  return band === "Red" && !!noContactRoute && !pregnant;
 }
 
 export function isAbovePregnancyThreshold(sys: number, dia: number): boolean {
@@ -42,6 +57,8 @@ export function participantAdvice(opts: {
   diastolic: number;
   pregnant?: boolean | null;
   noContactRoute?: boolean | null;
+  contactViaGp?: boolean | null;
+  registeredWithGp?: boolean | null;
 }): { band: BpBand; pathway: AdvicePathway; paragraphs: string[]; advice: string } {
   const { category: band } = classifyBp(opts.systolic, opts.diastolic);
   let pathway: AdvicePathway = "Standard";
@@ -55,9 +72,14 @@ export function participantAdvice(opts: {
       pathway = "PregnantInRange";
       paragraphs = PREGNANT_IN_RANGE_ADVICE;
     }
+  } else if (opts.contactViaGp && band === "Amber") {
+    pathway = "GpContact";
+    paragraphs = GP_CONTACT_ADVICE;
   } else if (opts.noContactRoute && NO_CONTACT_ADVICE[band]) {
     pathway = "NoContactRoute";
-    paragraphs = NO_CONTACT_ADVICE[band]!;
+    paragraphs = opts.registeredWithGp === false
+      ? [...NO_CONTACT_ADVICE[band]!, NOT_REGISTERED_ADVICE]
+      : NO_CONTACT_ADVICE[band]!;
   }
   return { band, pathway, paragraphs, advice: paragraphs.join(" ") };
 }
@@ -98,6 +120,8 @@ export const LAST_BP_CHECK_OPTIONS = [
 ] as const;
 
 export const CHECKED_BEFORE_OPTIONS = ["Yes", "No", "Not sure"] as const;
+
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const SITE_OPTIONS = ["EMHIP hub"] as const;
 export const EMHIP_SITE = "EMHIP hub";
