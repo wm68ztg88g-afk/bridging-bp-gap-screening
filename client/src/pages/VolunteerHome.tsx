@@ -39,7 +39,7 @@ export default function VolunteerHome() {
 
   const steps = [
     { n: 1, label: "Ask", sub: "Welcome them in", color: "bg-[#f7c631] text-[#24387a]" },
-    { n: 2, label: "Sit & check", sub: "Two readings", color: "bg-[#f37a4b] text-white" },
+    { n: 2, label: "Sit & check", sub: "Three readings", color: "bg-[#f37a4b] text-white" },
     { n: 3, label: "Know your numbers", sub: "Card + advice", color: "bg-[#2ba05b] text-white" },
   ];
 
