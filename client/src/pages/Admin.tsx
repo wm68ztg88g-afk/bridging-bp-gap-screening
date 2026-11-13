@@ -13,7 +13,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useStore } from "@/lib/store";
 import { Logo } from "@/components/Logo";
-import { ArrowLeft, Download, LogOut, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, LogOut, Minus, Plus, ShieldCheck, UserPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  FOLLOW_UP_STATUSES, RESULT_OPTIONS, isOverdue, needsAction, needsReason, compareForAdmin,
+  countUniquePeople, followUpDeadline,
+} from "@shared/followup";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { BpBandBadge } from "@/components/BpGuidance";
 import { countEmhip, emhipLabel } from "@shared/emhip";
@@ -32,13 +39,6 @@ async function adminFetch(path: string, password: string, init?: RequestInit) {
   return res;
 }
 
-const OUTCOME_OPTIONS = [
-  "Not yet reviewed",
-  "Referred to GP",
-  "Referred to Acute Hypertension Clinic",
-  "Contacted — advice given",
-  "No action needed",
-];
 
 export default function Admin() {
   const { adminPassword, setAdminPassword } = useStore();
@@ -109,7 +109,7 @@ export default function Admin() {
   return (
     <div className="min-h-dvh bg-background">
       <header className="border-b border-border px-4 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Logo className="w-6 h-6 text-primary" />
             <span className="font-semibold text-sm">Bridging the BP Gap — Admin</span>
@@ -118,7 +118,7 @@ export default function Admin() {
             <LogOut className="w-3.5 h-3.5" /> Log out
           </Button>
         </div>
-        <div className="max-w-4xl mx-auto flex gap-4 mt-3 text-sm">
+        <div className="max-w-6xl mx-auto flex gap-4 mt-3 text-sm">
           <button
             className={`pb-2 border-b-2 -mb-px ${tab === "records" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground"}`}
             onClick={() => setTab("records")}
@@ -135,50 +135,85 @@ export default function Admin() {
           </button>
         </div>
       </header>
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-4 py-6">
         {tab === "records" ? <RecordsPanel password={adminPassword} /> : <VolunteersPanel password={adminPassword} />}
       </main>
     </div>
   );
 }
 
+function fmtDate(iso?: string | null) {
+  return iso ? new Date(iso).toLocaleDateString("en-GB") : "";
+}
+
 function RecordsPanel({ password }: { password: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [showTests, setShowTests] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const { data: rows, isLoading, error } = useQuery({
     queryKey: ["/api/admin/screenings", password],
     queryFn: async () => (await adminFetch("/api/admin/screenings", password)).json(),
   });
 
-  const outcomeMutation = useMutation({
-    mutationFn: async ({ id, outcome }: { id: number; outcome: string }) =>
-      (await adminFetch(`/api/admin/screenings/${id}/outcome`, password, {
-        method: "PATCH",
-        body: JSON.stringify({ outcome }),
-      })).json(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/screenings", password] }),
-    onError: () => toast({ title: "Couldn't update outcome", variant: "destructive" }),
-  });
-
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading records…</p>;
   if (error) return <p className="text-sm text-destructive">Couldn't load records.</p>;
 
-  const total = rows?.length ?? 0;
-  const elevated = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).category !== "Green").length ?? 0;
-  const urgent = rows?.filter((r: any) => classifyBp(r.avgSystolic, r.avgDiastolic).urgent).length ?? 0;
-  const emhip = countEmhip(rows ?? []);
+  const now = new Date();
+  const all = (rows ?? []).map((r: any) => ({ ...r, band: classifyBp(r.avgSystolic, r.avgDiastolic).category }));
+  const real = all.filter((r: any) => !r.isTest);
+  const testCount = all.length - real.length;
+
+  // All counts exclude test records.
+  const total = real.length;
+  const people = countUniquePeople(real);
+  const elevated = real.filter((r: any) => r.band !== "Green").length;
+  const urgent = real.filter((r: any) => r.band === "Red").length;
+  const followUp = real.filter((r: any) => needsAction(r.band, r.outcome)).length;
+  const overdue = real.filter((r: any) => isOverdue(r.band, r.outcome, r.createdAt, now)).length;
+  const noGp = real.filter((r: any) => r.registeredWithGp === false).length;
+  const unableToContact = real.filter((r: any) => r.outcome === "Unable to contact").length;
+  const confirmed = real.filter((r: any) => r.resultOutcome === "New hypertension confirmed").length;
+  const emhip = countEmhip(real);
+
+  const visible = (showTests ? all : real).sort((a: any, b: any) =>
+    compareForAdmin({ band: a.band, status: a.outcome, createdAt: a.createdAt }, { band: b.band, status: b.outcome, createdAt: b.createdAt }, now),
+  );
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Screened" value={total} testId="stat-total" />
-        <StatCard label="Yellow / amber / red" value={elevated} testId="stat-elevated" />
-        <StatCard label="Red band" value={urgent} testId="stat-urgent" tone={urgent > 0 ? "destructive" : undefined} />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Current programme bands ({BP_PROTOCOL_VERSION}) are calculated from the recorded BP averages.
-        Historical readings and saved categories are unchanged. CSV includes both the recorded category and current programme band.
-      </p>
+      {overdue > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-red-600/50 bg-red-50 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100" data-testid="banner-overdue">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <p><strong>{overdue} overdue follow-up{overdue === 1 ? "" : "s"}.</strong> Red records need action within 48 hours and amber within 4 weeks. They are listed first below.</p>
+        </div>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium">Follow-up</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Needs follow-up (amber/red)" value={followUp} testId="stat-followup" />
+          <StatCard label="Overdue" value={overdue} testId="stat-overdue" tone="destructive" />
+          <StatCard label="Unable to contact" value={unableToContact} testId="stat-unable" />
+          <StatCard label="New hypertension confirmed" value={confirmed} testId="stat-confirmed" />
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium">Screening</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <StatCard label="People (by name + DOB)" value={people} testId="stat-people" />
+          <StatCard label="Screenings" value={total} testId="stat-total" />
+          <StatCard label="Yellow / amber / red" value={elevated} testId="stat-elevated" />
+          <StatCard label="Red band" value={urgent} testId="stat-urgent" tone="destructive" />
+          <StatCard label="Not registered with a GP" value={noGp} testId="stat-nogp" />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Counts exclude test records. Current programme bands ({BP_PROTOCOL_VERSION}) are calculated from the recorded BP averages;
+          historical readings and saved categories are unchanged. CSV includes both the recorded category and current programme band.
+        </p>
+      </section>
+
       <section aria-labelledby="emhip-summary-title" className="space-y-2">
         <h2 id="emhip-summary-title" className="text-sm font-medium">Enrolled with EMHIP?</h2>
         <div className="grid grid-cols-3 gap-3">
@@ -191,10 +226,12 @@ function RecordsPanel({ password }: { password: string }) {
         </p>
       </section>
 
-      <div className="flex justify-end">
-        <a
-          href={`${API_BASE}/api/admin/screenings/export.csv?password=${encodeURIComponent(password)}`}
-        >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Switch checked={showTests} onCheckedChange={setShowTests} data-testid="switch-show-tests" />
+          Show test records ({testCount})
+        </label>
+        <a href={`${API_BASE}/api/admin/screenings/export.csv?password=${encodeURIComponent(password)}`}>
           <Button variant="outline" size="sm" className="gap-1.5" data-testid="button-export-csv">
             <Download className="w-3.5 h-3.5" /> Export CSV
           </Button>
@@ -205,56 +242,187 @@ function RecordsPanel({ password }: { password: string }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Patient</TableHead>
-              <TableHead>EMHIP enrolled</TableHead>
+              <TableHead>Participant</TableHead>
               <TableHead>BP avg</TableHead>
-              <TableHead>Current band / advice</TableHead>
+              <TableHead>Band / advice given</TableHead>
+              <TableHead>GP</TableHead>
+              <TableHead>EMHIP</TableHead>
               <TableHead>BMI</TableHead>
               <TableHead>Volunteer</TableHead>
               <TableHead>Date</TableHead>
-              <TableHead>Outcome</TableHead>
+              <TableHead>Follow-up</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows?.map((r: any) => {
+            {visible.map((r: any) => {
               const current = classifyBp(r.avgSystolic, r.avgDiastolic);
+              const late = !r.isTest && isOverdue(r.band, r.outcome, r.createdAt, now);
+              const deadline = followUpDeadline(r.band, r.createdAt);
               return (
-              <TableRow key={r.id} data-testid={`row-screening-${r.id}`}>
-                <TableCell className="font-medium">{r.patientName}</TableCell>
-                <TableCell data-testid={`emhip-screening-${r.id}`}>{emhipLabel(r.enrolledWithEmhip)}</TableCell>
-                <TableCell className="tabular-nums">{r.avgSystolic}/{r.avgDiastolic}</TableCell>
-                <TableCell>
-                  <BpBandBadge band={current.category} />
-                  <p className="text-xs mt-1 min-w-48 max-w-xs">{current.advice}</p>
-                  {r.bpCategory !== current.category && (
-                    <p className="text-xs text-muted-foreground mt-1">Originally recorded: {r.bpCategory}</p>
-                  )}
-                </TableCell>
-                <TableCell className="tabular-nums">{r.bmi}</TableCell>
-                <TableCell className="text-muted-foreground">{r.volunteerName}</TableCell>
-                <TableCell className="text-muted-foreground">{new Date(r.screeningDate).toLocaleDateString("en-GB")}</TableCell>
-                <TableCell>
-                  <Select
-                    value={r.outcome}
-                    onValueChange={(v) => outcomeMutation.mutate({ id: r.id, outcome: v })}
-                  >
-                    <SelectTrigger className="h-8 text-xs w-48" data-testid={`select-outcome-${r.id}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OUTCOME_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-              </TableRow>
-            );})}
-            {total === 0 && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No screenings recorded yet.</TableCell></TableRow>
+                <TableRow
+                  key={r.id}
+                  data-testid={`row-screening-${r.id}`}
+                  className={r.isTest ? "opacity-60" : late ? "bg-red-50 dark:bg-red-950/40" : undefined}
+                >
+                  <TableCell className="font-medium">
+                    <div>{r.patientName}</div>
+                    {r.isTest && <Badge variant="outline" className="mt-1">Test record</Badge>}
+                    {late && (
+                      <Badge className="mt-1 bg-red-700 text-white hover:bg-red-700" data-testid={`badge-overdue-${r.id}`}>
+                        Overdue
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="tabular-nums">{r.avgSystolic}/{r.avgDiastolic}</TableCell>
+                  <TableCell>
+                    <BpBandBadge band={current.category} />
+                    <p className="text-xs mt-1 min-w-48 max-w-xs">{current.advice}</p>
+                    {r.bpCategory !== current.category && (
+                      <p className="text-xs text-muted-foreground mt-1">Originally recorded: {r.bpCategory}</p>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {r.registeredWithGp ? (r.gpPractice || "Registered") : <span className="font-medium">Not registered</span>}
+                  </TableCell>
+                  <TableCell data-testid={`emhip-screening-${r.id}`}>{emhipLabel(r.enrolledWithEmhip)}</TableCell>
+                  <TableCell className="tabular-nums">{r.bmi}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.volunteerName}</TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">{fmtDate(r.screeningDate)}</TableCell>
+                  <TableCell className="min-w-52 text-xs space-y-1">
+                    <div className="font-medium text-sm">{r.outcome}</div>
+                    {r.resultOutcome && r.resultOutcome !== "Not yet known" && <div>Result: {r.resultOutcome}</div>}
+                    {r.contactAttempts > 0 && <div>Contact attempts: {r.contactAttempts}</div>}
+                    {deadline && r.outcome === "Not yet reviewed" && !r.isTest && (
+                      <div className={late ? "text-red-700 dark:text-red-300 font-medium" : "text-muted-foreground"}>
+                        {late ? "Was due" : "Due by"} {deadline.toLocaleDateString("en-GB")}
+                      </div>
+                    )}
+                    {r.outcomeUpdatedAt && <div className="text-muted-foreground">Updated {fmtDate(r.outcomeUpdatedAt)}</div>}
+                    <Button size="sm" variant="outline" className="h-7 mt-1" onClick={() => setEditing(r)} data-testid={`button-followup-${r.id}`}>
+                      Update
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {visible.length === 0 && (
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No screenings recorded yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       </div>
+
+      {editing && (
+        <FollowUpDialog
+          record={editing}
+          password={password}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["/api/admin/screenings", password] });
+            toast({ title: "Follow-up saved" });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function FollowUpDialog({ record, password, onClose, onSaved }: { record: any; password: string; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [outcome, setOutcome] = useState<string>(record.outcome);
+  const [result, setResult] = useState<string>(record.resultOutcome || "Not yet known");
+  const [attempts, setAttempts] = useState<number>(record.contactAttempts || 0);
+  const [notes, setNotes] = useState<string>(record.outcomeNotes || "");
+  const [isTest, setIsTest] = useState<boolean>(!!record.isTest);
+  const [saving, setSaving] = useState(false);
+  const reasonRequired = needsReason(record.band, outcome);
+
+  async function save() {
+    if (reasonRequired && !notes.trim()) {
+      toast({ title: "Add a reason", description: "Amber and red records need a reason for “No action needed”.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await adminFetch(`/api/admin/screenings/${record.id}/outcome`, password, {
+        method: "PATCH",
+        body: JSON.stringify({ outcome, resultOutcome: result, contactAttempts: attempts, outcomeNotes: notes }),
+      });
+      if (isTest !== !!record.isTest) {
+        await adminFetch(`/api/admin/screenings/${record.id}/test`, password, {
+          method: "PATCH",
+          body: JSON.stringify({ isTest }),
+        });
+      }
+      onSaved();
+    } catch {
+      toast({ title: "Couldn't save follow-up", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Follow-up: {record.patientName}</DialogTitle>
+          <DialogDescription>
+            {record.band} · {record.avgSystolic}/{record.avgDiastolic} mmHg · screened {fmtDate(record.screeningDate)}
+            {record.phone ? ` · ${record.phone}` : " · no phone recorded"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Follow-up status</Label>
+            <Select value={outcome} onValueChange={setOutcome}>
+              <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {FOLLOW_UP_STATUSES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Confirmed result</Label>
+            <Select value={result} onValueChange={setResult}>
+              <SelectTrigger data-testid="select-result"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RESULT_OPTIONS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Contact attempts</Label>
+            <div className="flex items-center gap-2">
+              <Button type="button" size="icon" variant="outline" className="h-8 w-8" onClick={() => setAttempts(Math.max(0, attempts - 1))} aria-label="One fewer attempt">
+                <Minus className="w-3.5 h-3.5" />
+              </Button>
+              <span className="w-8 text-center tabular-nums" data-testid="text-attempts">{attempts}</span>
+              <Button type="button" size="icon" variant="outline" className="h-8 w-8" onClick={() => setAttempts(attempts + 1)} aria-label="One more attempt">
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="followup-notes">Notes{reasonRequired ? " (reason required)" : ""}</Label>
+            <Textarea id="followup-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+              placeholder={reasonRequired ? "Why does this amber/red record need no action?" : "Optional"} data-testid="input-followup-notes" />
+          </div>
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
+            <span>
+              <span className="font-medium">Test record</span>
+              <span className="block text-xs text-muted-foreground">Excluded from all counts and the follow-up list.</span>
+            </span>
+            <Switch checked={isTest} onCheckedChange={setIsTest} data-testid="switch-test-record" />
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving} data-testid="button-save-followup">{saving ? "Saving…" : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

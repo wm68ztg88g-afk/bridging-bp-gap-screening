@@ -1,6 +1,7 @@
 import { pgTable, text, integer, real, boolean, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { FOLLOW_UP_STATUSES, RESULT_OPTIONS } from "./followup";
 
 // ---------------------------------------------------------------------------
 // Volunteers — trained & DBS-cleared community volunteers who collect data
@@ -82,6 +83,12 @@ export const screenings = pgTable("screenings", {
   // Follow-up outcome (filled in later by the clinical lead, not the volunteer)
   outcome: text("outcome").notNull().default("Not yet reviewed"),
   outcomeNotes: text("outcome_notes"),
+  resultOutcome: text("result_outcome").notNull().default("Not yet known"),
+  contactAttempts: integer("contact_attempts").notNull().default(0),
+  outcomeUpdatedAt: text("outcome_updated_at"),
+  firstActionAt: text("first_action_at"),
+  // Test entries are kept for audit but excluded from all counts and alerts.
+  isTest: boolean("is_test").notNull().default(false),
 
   createdAt: text("created_at").notNull(),
 });
@@ -96,6 +103,11 @@ export const insertScreeningSchema = createInsertSchema(screenings).omit({
   urgentFlag: true,
   outcome: true,
   outcomeNotes: true,
+  resultOutcome: true,
+  contactAttempts: true,
+  outcomeUpdatedAt: true,
+  firstActionAt: true,
+  isTest: true,
   createdAt: true,
   volunteerName: true,
 }).extend({
@@ -117,6 +129,11 @@ export type InsertScreening = z.infer<typeof insertScreeningSchema>;
 export type Screening = typeof screenings.$inferSelect;
 
 export const updateOutcomeSchema = z.object({
-  outcome: z.string(),
-  outcomeNotes: z.string().optional(),
+  outcome: z.enum(FOLLOW_UP_STATUSES),
+  resultOutcome: z.enum(RESULT_OPTIONS).optional(),
+  contactAttempts: z.number().int().min(0).max(50).optional(),
+  outcomeNotes: z.string().max(2000).optional(),
 });
+export type UpdateOutcome = z.infer<typeof updateOutcomeSchema>;
+
+export const setTestSchema = z.object({ isTest: z.boolean() });

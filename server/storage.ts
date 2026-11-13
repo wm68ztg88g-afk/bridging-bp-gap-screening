@@ -82,6 +82,11 @@ CREATE TABLE IF NOT EXISTS screenings (
   await pool.query(`
 ALTER TABLE screenings ADD COLUMN IF NOT EXISTS consent_gp_contact BOOLEAN;
 ALTER TABLE screenings ADD COLUMN IF NOT EXISTS enrolled_with_emhip BOOLEAN;
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS result_outcome TEXT NOT NULL DEFAULT 'Not yet known';
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS contact_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS outcome_updated_at TEXT;
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS first_action_at TEXT;
+ALTER TABLE screenings ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false;
 `);
 }
 
@@ -98,7 +103,8 @@ export interface IStorage {
   createScreening(s: typeof screenings.$inferInsert): Promise<Screening>;
   listScreenings(): Promise<Screening[]>;
   findPossibleDuplicate(patientName: string, dob: string): Promise<Screening | undefined>;
-  updateOutcome(id: number, outcome: string, outcomeNotes?: string): Promise<Screening | undefined>;
+  getScreening(id: number): Promise<Screening | undefined>;
+  updateFollowUp(id: number, patch: Partial<Screening>): Promise<Screening | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -146,15 +152,18 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async updateOutcome(id: number, outcome: string, outcomeNotes?: string) {
+  async getScreening(id: number) {
     await schemaReady;
-    await db
-      .update(screenings)
-      .set({ outcome, outcomeNotes: outcomeNotes ?? null })
-      .where(eq(screenings.id, id));
     const rows = await db.select().from(screenings).where(eq(screenings.id, id));
     return rows[0];
   }
+
+  async updateFollowUp(id: number, patch: Partial<Screening>) {
+    await schemaReady;
+    await db.update(screenings).set(patch).where(eq(screenings.id, id));
+    return this.getScreening(id);
+  }
+
 }
 
 export const storage = new DatabaseStorage();

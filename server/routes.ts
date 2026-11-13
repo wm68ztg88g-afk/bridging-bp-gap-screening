@@ -2,7 +2,9 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
 import { storage } from "./storage";
-import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema } from "@shared/schema";
+import { insertScreeningSchema, insertVolunteerSchema, updateOutcomeSchema, setTestSchema } from "@shared/schema";
+import { needsReason, NOT_REVIEWED, isOverdue } from "@shared/followup";
+import { sendBandAlert } from "./alerts";
 import { classifyBp, BP_PROTOCOL_VERSION } from "@shared/bp-protocol";
 import { emhipLabel } from "@shared/emhip";
 
@@ -100,6 +102,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     res.status(201).json(record);
+
+    // Fire-and-forget: alert the clinical lead for amber/red. No patient details.
+    void sendBandAlert(category, record.hubLocation, new Date(record.createdAt));
   });
 
   // -------------------------------------------------------------------
@@ -133,6 +138,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "consentToContact", "consentGpContact", "bpCategory", "urgentFlag", "outcome", "outcomeNotes", "notes",
       "currentProgrammeBand", "currentProgrammeAdvice", "currentProgrammeVersion",
       "enrolledWithEmhip",
+      "resultOutcome", "contactAttempts", "firstActionAt", "outcomeUpdatedAt", "overdue", "isTest",
     ];
     const escape = (v: unknown) => {
       let s = v === null || v === undefined ? "" : String(v);
@@ -150,6 +156,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         currentProgrammeBand: current.category,
         currentProgrammeAdvice: current.advice,
         currentProgrammeVersion: BP_PROTOCOL_VERSION,
+        overdue: isOverdue(current.category, r.outcome, r.createdAt) ? "Yes" : "No",
+        isTest: r.isTest ? "Yes" : "No",
       };
       lines.push(headers.map((h) => escape((exportRow as any)[h])).join(","));
     }
@@ -160,8 +168,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/screenings/:id/outcome", requireAdmin, async (req, res) => {
     const parsed = updateOutcomeSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(422).json({ message: "Invalid outcome." });
-    const updated = await storage.updateOutcome(Number(req.params.id), parsed.data.outcome, parsed.data.outcomeNotes);
+    if (!parsed.success) return res.status(422).json({ message: "Invalid follow-up update." });
+    const id = Number(req.params.id);
+    const existing = await storage.getScreening(id);
+    if (!existing) return res.status(404).json({ message: "Record not found." });
+
+    const band = classifyBp(existing.avgSystolic, existing.avgDiastolic).category;
+    const { outcome, resultOutcome, contactAttempts, outcomeNotes } = parsed.data;
+    const notes = outcomeNotes !== undefined ? outcomeNotes.trim() : (existing.outcomeNotes ?? "");
+    if (needsReason(band, outcome) && !notes) {
+      return res.status(422).json({ message: "Add a reason when marking an amber or red record as needing no action." });
+    }
+
+    const now = new Date().toISOString();
+    const updated = await storage.updateFollowUp(id, {
+      outcome,
+      ...(resultOutcome !== undefined ? { resultOutcome } : {}),
+      ...(contactAttempts !== undefined ? { contactAttempts } : {}),
+      outcomeNotes: notes || null,
+      outcomeUpdatedAt: now,
+      // First time the record leaves "Not yet reviewed" is when follow-up started.
+      ...(!existing.firstActionAt && outcome !== NOT_REVIEWED ? { firstActionAt: now } : {}),
+    });
+    res.json(updated);
+  });
+
+  app.patch("/api/admin/screenings/:id/test", requireAdmin, async (req, res) => {
+    const parsed = setTestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ message: "Invalid value." });
+    const updated = await storage.updateFollowUp(Number(req.params.id), { isTest: parsed.data.isTest });
+    if (!updated) return res.status(404).json({ message: "Record not found." });
     res.json(updated);
   });
 
