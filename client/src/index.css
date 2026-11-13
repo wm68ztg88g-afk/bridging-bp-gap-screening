@@ -18,32 +18,32 @@
   --sidebar: 0 0% 96%;
   --sidebar-foreground: 0 0% 9%;
   --sidebar-border: 0 0% 92%;
-  --sidebar-primary: 183 68% 26%;
+  --sidebar-primary: 226 54% 31%;
   --sidebar-primary-foreground: 0 0% 98%;
   --sidebar-accent: 40 20% 90%;
   --sidebar-accent-foreground: 0 0% 9%;
-  --sidebar-ring: 183 68% 26%;
+  --sidebar-ring: 226 54% 31%;
   --popover: 40 20% 96%;
   --popover-foreground: 0 0% 9%;
   --popover-border: 40 12% 88%;
-  --primary: 183 68% 26%;
+  --primary: 226 54% 31%;
   --primary-foreground: 0 0% 98%;
-  --secondary: 40 15% 92%;
+  --secondary: 40 84% 95%;
   --secondary-foreground: 0 0% 9%;
-  --muted: 40 15% 93%;
+  --muted: 40 40% 95%;
   --muted-foreground: 40 6% 40%;
-  --accent: 183 30% 90%;
-  --accent-foreground: 183 68% 18%;
+  --accent: 326 58% 94%;
+  --accent-foreground: 326 58% 30%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
   --input: 40 8% 75%;
-  --ring: 183 68% 26%;
-  --chart-1: 183 68% 32%;
+  --ring: 226 54% 31%;
+  --chart-1: 226 54% 31%;
   --chart-2: 200 70% 45%;
   --chart-3: 30 80% 50%;
   --chart-4: 0 65% 48%;
   --chart-5: 100 45% 40%;
-  --font-sans: 'Inter', sans-serif;
+  --font-sans: 'Lato', 'Inter', sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: 0.5rem;
@@ -116,27 +116,27 @@
   --sidebar: 0 0% 11%;
   --sidebar-foreground: 0 0% 98%;
   --sidebar-border: 0 0% 15%;
-  --sidebar-primary: 183 45% 52%;
+  --sidebar-primary: 45 93% 58%;
   --sidebar-primary-foreground: 0 0% 9%;
   --sidebar-accent: 0 0% 16%;
   --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring: 183 45% 52%;
+  --sidebar-ring: 45 93% 58%;
   --popover: 40 6% 13%;
   --popover-foreground: 0 0% 98%;
   --popover-border: 40 5% 17%;
-  --primary: 183 45% 52%;
-  --primary-foreground: 0 0% 9%;
+  --primary: 45 93% 58%;
+  --primary-foreground: 226 54% 15%;
   --secondary: 40 6% 18%;
   --secondary-foreground: 0 0% 98%;
   --muted: 40 6% 19%;
   --muted-foreground: 40 4% 65%;
-  --accent: 183 20% 20%;
-  --accent-foreground: 183 45% 80%;
+  --accent: 326 30% 20%;
+  --accent-foreground: 326 58% 85%;
   --destructive: 0 70% 55%;
   --destructive-foreground: 0 0% 9%;
   --input: 40 4% 30%;
-  --ring: 183 45% 52%;
-  --chart-1: 183 45% 55%;
+  --ring: 45 93% 58%;
+  --chart-1: 45 93% 58%;
   --chart-2: 200 60% 60%;
   --chart-3: 30 70% 60%;
   --chart-4: 0 60% 62%;
@@ -313,4 +313,14 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* Bridging the BP Gap brand palette (from the poster and Know Your Numbers card) */
+:root {
+  --brand-navy: #24387a;
+  --brand-magenta: #b12f78;
+  --brand-yellow: #f7c631;
+  --brand-orange: #f37a4b;
+  --brand-red: #d62f3b;
+  --brand-cream: #fdf6e8;
 }

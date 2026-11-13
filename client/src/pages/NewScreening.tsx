@@ -440,25 +440,26 @@ export default function NewScreening() {
 
   return (
     <div className="min-h-dvh bg-background pb-24">
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
+      <header className="sticky top-0 z-10 bg-[#24387a] text-white px-4 py-3">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <button
             onClick={() => (step === 0 ? navigate("/") : goBack())}
-            className="text-muted-foreground hover:text-foreground p-1 -ml-1"
+            className="text-white/80 hover:text-white p-1 -ml-1"
             data-testid="button-back"
             aria-label="Back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <div className="text-sm font-medium" data-testid="text-step-title">{STEPS[step]}</div>
-            <div className="text-xs text-muted-foreground">Step {step + 1} of {STEPS.length}</div>
+            <div className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#f7c631]">Bridging the BP Gap</div>
+            <div className="text-sm font-semibold" data-testid="text-step-title">{STEPS[step]}</div>
+            <div className="text-xs text-white/70">Step {step + 1} of {STEPS.length}</div>
           </div>
           <div className="w-7" />
         </div>
-        <div className="max-w-xl mx-auto mt-2 h-1 rounded-full bg-muted overflow-hidden">
+        <div className="max-w-xl mx-auto mt-2 h-1.5 rounded-full bg-white/20 overflow-hidden">
           <div
-            className="h-full bg-primary transition-all"
+            className="h-full bg-[#f7c631] transition-all"
             style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
           />
         </div>

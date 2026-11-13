@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useStore } from "@/lib/store";
-import { Logo } from "@/components/Logo";
+import { BrandBanner } from "@/components/Logo";
 import { LogOut, ClipboardPlus, ShieldCheck } from "lucide-react";
 
 export default function VolunteerHome() {
@@ -40,13 +40,7 @@ export default function VolunteerHome() {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-4 py-10 bg-background">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <Logo className="w-10 h-10 text-primary" />
-          <h1 className="text-xl font-semibold tracking-tight" data-testid="text-app-title">
-            Bridging the BP Gap
-          </h1>
-          <p className="text-sm text-muted-foreground">Community blood pressure screening</p>
-        </div>
+        <BrandBanner title="Know your" highlight="numbers" subtitle="Free community blood pressure checks" />
 
         {!volunteer ? (
           <Card>
@@ -65,7 +59,7 @@ export default function VolunteerHome() {
                     data-testid="input-access-code"
                     autoFocus
                     inputMode="text"
-                    placeholder="e.g. WCEN-1234"
+                    placeholder="e.g. CEN-1234"
                     value={code}
                     onChange={(e) => setCode(e.target.value)}
                   />
@@ -90,7 +84,7 @@ export default function VolunteerHome() {
                 data-testid="button-new-screening"
               >
                 <ClipboardPlus className="w-4 h-4" />
-                Record a new patient
+                Record a new participant
               </Button>
               <Button
                 variant="outline"

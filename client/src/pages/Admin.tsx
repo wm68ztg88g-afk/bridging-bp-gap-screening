@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useStore } from "@/lib/store";
-import { Logo } from "@/components/Logo";
+import { BrandBanner, Logo } from "@/components/Logo";
 import { AlertTriangle, ArrowLeft, Download, LogOut, Minus, Plus, ShieldCheck, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,11 +52,7 @@ export default function Admin() {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-4 py-10 bg-background">
         <div className="w-full max-w-sm space-y-6">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <Logo className="w-10 h-10 text-primary" />
-            <h1 className="text-xl font-semibold tracking-tight">Programme admin</h1>
-            <p className="text-sm text-muted-foreground">For the clinical lead only</p>
-          </div>
+          <BrandBanner title="Programme admin" subtitle="For the programme lead only" />
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -109,26 +105,29 @@ export default function Admin() {
 
   return (
     <div className="min-h-dvh bg-background">
-      <header className="border-b border-border px-4 py-3">
+      <header className="bg-[#24387a] text-white px-4 pt-3 border-b-4 border-[#f7c631]">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Logo className="w-6 h-6 text-primary" />
-            <span className="font-semibold text-sm">Bridging the BP Gap — Admin</span>
+          <div className="flex items-center gap-3">
+            <Logo className="w-9 h-9" />
+            <div className="leading-tight">
+              <div className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#f7c631]">Bridging the BP Gap</div>
+              <div className="font-extrabold text-base">Programme admin</div>
+            </div>
           </div>
-          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setAdminPassword(null)} data-testid="button-admin-logout">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-white hover:bg-white/10 hover:text-white" onClick={() => setAdminPassword(null)} data-testid="button-admin-logout">
             <LogOut className="w-3.5 h-3.5" /> Log out
           </Button>
         </div>
         <div className="max-w-6xl mx-auto flex gap-4 mt-3 text-sm">
           <button
-            className={`pb-2 border-b-2 -mb-px ${tab === "records" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground"}`}
+            className={`pb-2 border-b-2 -mb-px ${tab === "records" ? "border-[#f7c631] text-white font-semibold" : "border-transparent text-white/70 hover:text-white"}`}
             onClick={() => setTab("records")}
             data-testid="tab-records"
           >
             Screening records
           </button>
           <button
-            className={`pb-2 border-b-2 -mb-px ${tab === "volunteers" ? "border-primary text-foreground font-medium" : "border-transparent text-muted-foreground"}`}
+            className={`pb-2 border-b-2 -mb-px ${tab === "volunteers" ? "border-[#f7c631] text-white font-semibold" : "border-transparent text-white/70 hover:text-white"}`}
             onClick={() => setTab("volunteers")}
             data-testid="tab-volunteers"
           >
@@ -532,7 +531,7 @@ function VolunteersPanel({ password }: { password: string }) {
             onSubmit={(e) => { e.preventDefault(); if (name.trim() && code.trim()) createMutation.mutate(); }}
           >
             <Input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-volunteer-name" />
-            <Input placeholder="Access code (e.g. WCEN-1234)" value={code} onChange={(e) => setCode(e.target.value)} data-testid="input-volunteer-code" />
+            <Input placeholder="Access code (e.g. CEN-1234)" value={code} onChange={(e) => setCode(e.target.value)} data-testid="input-volunteer-code" />
             <Button type="submit" disabled={createMutation.isPending} data-testid="button-add-volunteer">Add</Button>
           </form>
         </CardContent>
